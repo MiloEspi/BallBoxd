@@ -31,10 +31,13 @@ const getTournamentAbbr = (name: string) => {
 // Renders a single match card with average rating and CTA buttons.
 export default function MatchCard({ match, onRate }: MatchCardProps) {
   const router = useRouter();
-  const avgScore = Number.isFinite(match.avg_score) ? match.avg_score : 0;
-  const avgDisplay = Number.isInteger(avgScore)
-    ? String(avgScore)
-    : avgScore.toFixed(1);
+  const avgScore = Number.isFinite(match.avg_score)
+    ? (match.avg_score as number)
+    : 0;
+  const avgDisplay =
+    Math.round(avgScore) === avgScore
+      ? String(avgScore)
+      : avgScore.toFixed(1);
   const hasMyRating = match.my_rating?.score !== undefined;
   const myScore = hasMyRating ? match.my_rating!.score : null;
   const myDisplay =
