@@ -2,7 +2,10 @@
 import type {
   FeedResponse,
   MatchDetailResponse,
+  ProfileActivityResponse,
+  ProfileHighlightsResponse,
   ProfileResponse,
+  ProfileStatsResponse,
 } from './types';
 
 const API_BASE_URL =
@@ -150,6 +153,36 @@ export function fetchProfile(username: string) {
   return authRequest<ProfileResponse>(`/api/v1/profile/${username}/`, {
     method: 'GET',
   });
+}
+
+// Profile stats tab endpoint.
+export function fetchProfileStats(username: string, range: string) {
+  return authRequest<ProfileStatsResponse>(
+    `/api/v1/profile/${username}/stats/?range=${encodeURIComponent(range)}`,
+    {
+      method: 'GET',
+    },
+  );
+}
+
+// Profile activity tab endpoint with optional range.
+export function fetchProfileActivity(username: string, range: string) {
+  return authRequest<ProfileActivityResponse>(
+    `/api/v1/profile/${username}/activity/?range=${encodeURIComponent(range)}`,
+    {
+      method: 'GET',
+    },
+  );
+}
+
+// Profile highlights tab endpoint with optional range.
+export function fetchProfileHighlights(username: string, range: string) {
+  return authRequest<ProfileHighlightsResponse>(
+    `/api/v1/profile/${username}/highlights/?range=${encodeURIComponent(range)}`,
+    {
+      method: 'GET',
+    },
+  );
 }
 
 type RatePayload = {

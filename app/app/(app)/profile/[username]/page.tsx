@@ -3,14 +3,76 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
-import { fetchProfile } from '@/app/lib/api';
-import type { ProfileResponse } from '@/app/lib/types';
+import {
+  fetchProfileActivity,
+  fetchProfileHighlights,
+  fetchProfileStats,
+} from '@/app/lib/api';
+import type {
+  ProfileActivityResponse,
+  ProfileHighlightsResponse,
+  ProfileStatsResponse,
+  TeamDistributionItem,
+  RatingWithMatch,
+} from '@/app/lib/types';
+import SegmentedControl from '@/app/ui/segmented-control';
 
 type ProfilePageParams = {
   username?: string | string[];
 };
 
-// Formats dates for profile activity entries.
+type TabKey = 'stats' | 'activity' | 'highlights';
+type RangeKey = 'week' | 'month' | 'year';
+
+type StatsPanelProps = {
+  data: ProfileStatsResponse | null;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+};
+
+type ActivityPanelProps = {
+  data: ProfileActivityResponse | null;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+};
+
+type HighlightsPanelProps = {
+  data: ProfileHighlightsResponse | null;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+};
+
+type StatCardItem = {
+  label: string;
+  value: string | number;
+};
+
+const TAB_OPTIONS = [
+  { value: 'stats', label: 'Stats' },
+  { value: 'activity', label: 'Activity' },
+  { value: 'highlights', label: 'Highlights' },
+];
+
+const RANGE_OPTIONS = [
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'Month' },
+  { value: 'year', label: 'Year' },
+];
+
+const TEAM_COLORS = [
+  '#6EE7B7',
+  '#60A5FA',
+  '#FBBF24',
+  '#F87171',
+  '#A78BFA',
+  '#F472B6',
+  '#38BDF8',
+];
+
+// Formats ISO date strings into a readable label.
 const formatDate = (value: string) => {
   const date = new Date(value);
   return date.toLocaleDateString('en-US', {
@@ -20,7 +82,7 @@ const formatDate = (value: string) => {
   });
 };
 
-// Maps minutes watched codes to readable labels.
+// Maps minutes watched codes to UI labels.
 const formatMinutes = (value: string) => {
   switch (value) {
     case 'LT_30':
@@ -36,83 +98,531 @@ const formatMinutes = (value: string) => {
   }
 };
 
-// Profile page showing stats and recent activity.
-export default function Page() {
-  const params = useParams<ProfilePageParams>();
+// Extracts a usable username from Next.js route params.
+const getUsernameFromParams = (params: ProfilePageParams) => {
   const usernameParam = params?.username;
-  const username =
-    typeof usernameParam === 'string'
-      ? usernameParam
-      : Array.isArray(usernameParam)
-        ? usernameParam[0]
-        : '';
-  const [data, setData] = useState<ProfileResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  if (typeof usernameParam === 'string') {
+    return usernameParam;
+  }
+  if (Array.isArray(usernameParam)) {
+    return usernameParam[0] ?? '';
+  }
+  return '';
+};
 
-  // Loads profile data and updates UI state.
-  const loadProfile = async (targetUsername?: string) => {
-    if (!targetUsername) {
-      setError('Invalid username.');
-      setLoading(false);
-      return;
-    }
+// Renders a single activity row card.
+const renderActivityCard = (rating: RatingWithMatch) => (
+  <article
+    key={rating.id}
+    className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
+  >
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-base font-semibold text-white">
+          {rating.match.home_team.name} vs {rating.match.away_team.name}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {rating.match.tournament.name} - {formatDate(rating.match.date_time)}
+        </p>
+      </div>
+      <span className="text-2xl font-semibold text-white">
+        {rating.score}
+      </span>
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+      <span className="rounded-full border border-slate-700 px-3 py-1 uppercase tracking-[0.2em] text-slate-400">
+        {formatMinutes(rating.minutes_watched)}
+      </span>
+      <span>{formatDate(rating.created_at)}</span>
+    </div>
+    {rating.review && (
+      <p className="mt-3 text-sm text-slate-300">{rating.review}</p>
+    )}
+  </article>
+);
 
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetchProfile(targetUsername);
-      setData(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load profile.');
-    } finally {
-      setLoading(false);
-    }
-  };
+// Renders a summary stat card.
+const renderStatCard = (stat: StatCardItem) => (
+  <div
+    key={stat.label}
+    className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
+  >
+    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+      {stat.label}
+    </p>
+    <p className="mt-2 text-3xl font-semibold text-white">{stat.value}</p>
+  </div>
+);
 
-  useEffect(() => {
-    if (!username) {
-      return;
-    }
-    loadProfile(username);
-  }, [username]);
+// Builds a conic-gradient string for the team distribution donut.
+const buildConicGradient = (
+  items: TeamDistributionItem[],
+  colors: string[],
+) => {
+  if (items.length === 0) {
+    return 'conic-gradient(#1f2937 0% 100%)';
+  }
+  let current = 0;
+  const stops = items.map((item, index) => {
+    const start = current;
+    const end = Math.min(100, current + item.pct);
+    current = end;
+    const color = colors[index % colors.length];
+    return `${color} ${start}% ${end}%`;
+  });
+  if (current < 100) {
+    stops.push(`#0f172a ${current}% 100%`);
+  }
+  return `conic-gradient(${stops.join(', ')})`;
+};
 
+// Shows profile stats summary cards.
+function StatsPanel({ data, loading, error, onRetry }: StatsPanelProps) {
   if (loading) {
     return (
-      <section className="space-y-6">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          Loading profile...
-        </div>
-      </section>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        Loading stats...
+      </div>
     );
   }
 
   if (error) {
     return (
-      <section className="space-y-6">
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-          <p>{error}</p>
-          <button
-            className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
-            type="button"
-            onClick={() => loadProfile(username)}
-          >
-            Retry
-          </button>
-        </div>
-      </section>
+      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+        <p>{error}</p>
+        <button
+          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
+          type="button"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 
   if (!data) {
     return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        No stats data found.
+      </div>
+    );
+  }
+
+  const statsCards: StatCardItem[] = [
+    { label: 'Total ratings', value: data.stats.total_ratings },
+    { label: 'Average score', value: data.stats.avg_score.toFixed(1) },
+    { label: 'Teams followed', value: data.stats.teams_followed },
+    { label: 'Followers', value: data.stats.followers },
+    { label: 'Following', value: data.stats.following },
+    { label: 'Fully watched', value: `${data.stats.fully_watched_pct}%` },
+  ];
+  const teamGradient = buildConicGradient(data.team_distribution, TEAM_COLORS);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {statsCards.map(renderStatCard)}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Teams distribution
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Matches rated by team.
+              </p>
+            </div>
+          </div>
+
+          {data.team_distribution.length === 0 ? (
+            <p className="mt-6 text-sm text-slate-400">
+              No team data yet.
+            </p>
+          ) : (
+            <div className="mt-6 flex flex-wrap items-center gap-6">
+              <div className="relative h-44 w-44 shrink-0">
+                <div
+                  className="h-full w-full rounded-full border border-white/10"
+                  style={{ background: teamGradient }}
+                />
+                <div className="absolute inset-6 rounded-full border border-white/10 bg-slate-950/80" />
+              </div>
+              <div className="space-y-3">
+                {data.team_distribution.map((item, index) => (
+                  <div
+                    key={`${item.label}-${index}`}
+                    title={`${item.label}: ${item.count} (${item.pct}%)`}
+                    className="flex items-center gap-3 text-sm text-slate-300"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{
+                        backgroundColor: TEAM_COLORS[index % TEAM_COLORS.length],
+                      }}
+                    />
+                    <span className="min-w-[140px] font-medium">
+                      {item.label}
+                    </span>
+                    <span className="text-slate-500">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            Leagues top 5
+          </p>
+          <p className="mt-2 text-sm text-slate-400">
+            Share of rated matches by league.
+          </p>
+
+          {data.league_top.length === 0 ? (
+            <p className="mt-6 text-sm text-slate-400">
+              No league data yet.
+            </p>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {data.league_top.map((item) => (
+                <div key={item.tournament.id} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm text-slate-300">
+                    <span className="font-medium">
+                      {item.tournament.name}
+                    </span>
+                    <span className="text-slate-500">
+                      {item.count} ({item.pct}%)
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-800/80">
+                    <div
+                      className="h-full rounded-full bg-emerald-400/70"
+                      style={{ width: `${Math.max(item.pct, 4)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// Shows profile activity list.
+function ActivityPanel({ data, loading, error, onRetry }: ActivityPanelProps) {
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        Loading activity...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+        <p>{error}</p>
+        <button
+          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
+          type="button"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!data || data.results.length === 0) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        No ratings yet.
+      </div>
+    );
+  }
+
+  return <div className="space-y-4">{data.results.map(renderActivityCard)}</div>;
+}
+
+// Shows highlights lists for top and low rated matches.
+function HighlightsPanel({
+  data,
+  loading,
+  error,
+  onRetry,
+}: HighlightsPanelProps) {
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        Loading highlights...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+        <p>{error}</p>
+        <button
+          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
+          type="button"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+        No highlights data found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Top rated
+        </h3>
+        {data.top_rated.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No top matches.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {data.top_rated.map(renderActivityCard)}
+          </div>
+        )}
+      </div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Low rated
+        </h3>
+        {data.low_rated.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No low matches.</p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {data.low_rated.map(renderActivityCard)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Profile page that lazy loads stats, activity, and highlights tabs.
+export default function Page() {
+  const params = useParams<ProfilePageParams>();
+  const username = getUsernameFromParams(params);
+  const [activeTab, setActiveTab] = useState<TabKey>('stats');
+  const [range, setRange] = useState<RangeKey>('month');
+  const [statsData, setStatsData] = useState<ProfileStatsResponse | null>(null);
+  const [activityData, setActivityData] =
+    useState<ProfileActivityResponse | null>(null);
+  const [highlightsData, setHighlightsData] =
+    useState<ProfileHighlightsResponse | null>(null);
+  const [loading, setLoading] = useState<Record<TabKey, boolean>>({
+    stats: false,
+    activity: false,
+    highlights: false,
+  });
+  const [errors, setErrors] = useState<Record<TabKey, string>>({
+    stats: '',
+    activity: '',
+    highlights: '',
+  });
+
+  // Updates the loading flag for a specific tab.
+  const setTabLoading = (tab: TabKey, value: boolean) => {
+    setLoading((prev) => ({ ...prev, [tab]: value }));
+  };
+
+  // Updates the error message for a specific tab.
+  const setTabError = (tab: TabKey, message: string) => {
+    setErrors((prev) => ({ ...prev, [tab]: message }));
+  };
+
+  // Loads the stats tab content.
+  const loadStats = async (targetUsername: string, rangeKey: RangeKey) => {
+    setTabLoading('stats', true);
+    setTabError('stats', '');
+    try {
+      const response = await fetchProfileStats(targetUsername, rangeKey);
+      setStatsData(response);
+    } catch (err) {
+      setTabError(
+        'stats',
+        err instanceof Error ? err.message : 'Failed to load stats.',
+      );
+    } finally {
+      setTabLoading('stats', false);
+    }
+  };
+
+  // Loads the activity tab content.
+  const loadActivity = async (targetUsername: string, rangeKey: RangeKey) => {
+    setTabLoading('activity', true);
+    setTabError('activity', '');
+    try {
+      const response = await fetchProfileActivity(targetUsername, rangeKey);
+      setActivityData(response);
+    } catch (err) {
+      setTabError(
+        'activity',
+        err instanceof Error ? err.message : 'Failed to load activity.',
+      );
+    } finally {
+      setTabLoading('activity', false);
+    }
+  };
+
+  // Loads the highlights tab content.
+  const loadHighlights = async (targetUsername: string, rangeKey: RangeKey) => {
+    setTabLoading('highlights', true);
+    setTabError('highlights', '');
+    try {
+      const response = await fetchProfileHighlights(targetUsername, rangeKey);
+      setHighlightsData(response);
+    } catch (err) {
+      setTabError(
+        'highlights',
+        err instanceof Error ? err.message : 'Failed to load highlights.',
+      );
+    } finally {
+      setTabLoading('highlights', false);
+    }
+  };
+
+  // Resets tab data when switching to a new profile username.
+  const handleUsernameChange = () => {
+    if (!username) {
+      return;
+    }
+
+    setActiveTab('stats');
+    setRange('month');
+    setStatsData(null);
+    setActivityData(null);
+    setHighlightsData(null);
+    setErrors({ stats: '', activity: '', highlights: '' });
+  };
+
+  // Loads tab data when the active tab or range changes.
+  const handleTabFetch = () => {
+    if (!username) {
+      return;
+    }
+
+    if (activeTab === 'stats') {
+      if (loading.stats) {
+        return;
+      }
+      if (
+        !statsData ||
+        statsData.user.username !== username ||
+        statsData.range !== range
+      ) {
+        loadStats(username, range);
+      }
+      return;
+    }
+
+    if (activeTab === 'activity') {
+      if (loading.activity) {
+        return;
+      }
+      if (
+        !activityData ||
+        activityData.user.username !== username ||
+        activityData.range !== range
+      ) {
+        loadActivity(username, range);
+      }
+      return;
+    }
+
+    if (activeTab === 'highlights') {
+      if (loading.highlights) {
+        return;
+      }
+      if (
+        !highlightsData ||
+        highlightsData.user.username !== username ||
+        highlightsData.range !== range
+      ) {
+        loadHighlights(username, range);
+      }
+    }
+  };
+
+  // Handles tab selection from the segmented control.
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as TabKey);
+  };
+
+  // Handles range selection for activity and highlights.
+  const handleRangeChange = (value: string) => {
+    setRange(value as RangeKey);
+  };
+
+  // Retries loading stats for the current profile.
+  const handleStatsRetry = () => {
+    if (!username) {
+      return;
+    }
+    loadStats(username, range);
+  };
+
+  // Retries loading activity for the current profile.
+  const handleActivityRetry = () => {
+    if (!username) {
+      return;
+    }
+    loadActivity(username, range);
+  };
+
+  // Retries loading highlights for the current profile.
+  const handleHighlightsRetry = () => {
+    if (!username) {
+      return;
+    }
+    loadHighlights(username, range);
+  };
+
+  useEffect(handleUsernameChange, [username]);
+  useEffect(handleTabFetch, [
+    activeTab,
+    range,
+    username,
+    statsData,
+    activityData,
+    highlightsData,
+    loading.stats,
+    loading.activity,
+    loading.highlights,
+  ]);
+
+  if (!username) {
+    return (
       <section className="space-y-6">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          No profile data found.
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+          Invalid username.
         </div>
       </section>
     );
   }
+
+  const profileUser =
+    statsData?.user ?? activityData?.user ?? highlightsData?.user ?? null;
 
   return (
     <section className="space-y-8">
@@ -120,77 +630,61 @@ export default function Page() {
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
           Profile
         </p>
-        <h1 className="text-2xl font-semibold">@{data.user.username}</h1>
+        <h1 className="text-2xl font-semibold">
+          @{profileUser?.username ?? username}
+        </h1>
         <p className="text-sm text-slate-400">
-          Recent ratings and stats.
+          Switch between stats, activity, and highlights.
         </p>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Total ratings', value: data.stats.total_ratings },
-          { label: 'Average score', value: data.stats.avg_score.toFixed(1) },
-          { label: 'Teams followed', value: data.stats.teams_followed },
-          { label: 'Followers', value: data.stats.followers },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-          >
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-              {stat.label}
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-white">
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Recent activity</h2>
-        {data.recent_activity.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-            No ratings yet.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {data.recent_activity.map((rating) => (
-              <article
-                key={rating.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-base font-semibold text-white">
-                      {rating.match.home_team.name} vs{' '}
-                      {rating.match.away_team.name}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {rating.match.tournament.name} •{' '}
-                      {formatDate(rating.match.date_time)}
-                    </p>
-                  </div>
-                  <span className="text-2xl font-semibold text-white">
-                    {rating.score}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="rounded-full border border-slate-700 px-3 py-1 uppercase tracking-[0.2em] text-slate-400">
-                    {formatMinutes(rating.minutes_watched)}
-                  </span>
-                  <span>{formatDate(rating.created_at)}</span>
-                </div>
-                {rating.review && (
-                  <p className="mt-3 text-sm text-slate-300">
-                    {rating.review}
-                  </p>
-                )}
-              </article>
-            ))}
+      <div className="flex flex-wrap items-center gap-4">
+        <SegmentedControl
+          options={TAB_OPTIONS}
+          value={activeTab}
+          onChange={handleTabChange}
+          ariaLabel="Profile tabs"
+          size="lg"
+        />
+        {(activeTab === 'highlights' || activeTab === 'stats') && (
+          <div className="ml-auto">
+            <SegmentedControl
+              options={RANGE_OPTIONS}
+              value={range}
+              onChange={handleRangeChange}
+              ariaLabel="Profile range"
+              size="sm"
+            />
           </div>
         )}
-      </section>
+      </div>
+
+      {activeTab === 'stats' && (
+        <StatsPanel
+          data={statsData}
+          loading={loading.stats}
+          error={errors.stats}
+          onRetry={handleStatsRetry}
+        />
+      )}
+
+      {activeTab === 'activity' && (
+        <ActivityPanel
+          data={activityData}
+          loading={loading.activity}
+          error={errors.activity}
+          onRetry={handleActivityRetry}
+        />
+      )}
+
+      {activeTab === 'highlights' && (
+        <HighlightsPanel
+          data={highlightsData}
+          loading={loading.highlights}
+          error={errors.highlights}
+          onRetry={handleHighlightsRetry}
+        />
+      )}
     </section>
   );
 }

@@ -63,10 +63,45 @@ export type ProfileStats = {
   teams_followed: number;
   followers: number;
   following: number;
+  fully_watched_pct: number;
+};
+
+export type TeamDistributionItem = {
+  label: string;
+  team: Team | null;
+  count: number;
+  pct: number;
+};
+
+export type LeagueRankingItem = {
+  tournament: Tournament;
+  count: number;
+  pct: number;
 };
 
 export type ProfileResponse = {
   user: UserMini;
   stats: ProfileStats;
   recent_activity: RatingWithMatch[];
+};
+
+export type ProfileStatsResponse = {
+  user: UserMini;
+  range: string;
+  stats: ProfileStats;
+  team_distribution: TeamDistributionItem[];
+  league_top: LeagueRankingItem[];
+};
+
+export type ProfileActivityResponse = {
+  user: UserMini;
+  range: string;
+  results: RatingWithMatch[];
+};
+
+export type ProfileHighlightsResponse = {
+  user: UserMini;
+  range: string;
+  top_rated: RatingWithMatch[];
+  low_rated: RatingWithMatch[];
 };
