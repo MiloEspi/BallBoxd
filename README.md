@@ -50,10 +50,25 @@ npm run dev
 ```
 
 ### Configuracion opcional
-Si el backend no corre en `http://localhost:8000`, setear:
+Si el backend no corre en `http://localhost:8000/api/v1`, setear:
 ```
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
 ```
+
+### Demo mode (sin backend)
+Para correr solo con mocks locales de Next:
+```
+NEXT_PUBLIC_DEMO_MODE=true
+```
+Luego:
+```powershell
+cd app
+npm run dev
+```
+Credenciales demo:
+- camilo / 1234
+- alice / 1234
+- bob / 1234
 
 ## Autenticacion (Token)
 1) Registrate o logueate para obtener el token.
@@ -64,6 +79,11 @@ Authorization: Token <token>
 
 ## Seeds
 `python manage.py seed` carga usuarios, equipos, torneos, partidos, follows y ratings de ejemplo.
+
+## Deploy en Vercel (demo)
+1) Deploy del frontend (carpeta `app/`).
+2) En Vercel setear `NEXT_PUBLIC_DEMO_MODE=true`.
+3) Deploy. No requiere backend.
 
 ## Notas
 - CORS habilitado para `http://localhost:3000`.

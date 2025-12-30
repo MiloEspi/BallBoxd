@@ -8,8 +8,10 @@ import type {
   ProfileStatsResponse,
 } from './types';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'false';
+const API_BASE_URL = DEMO_MODE
+  ? ''
+  : process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api/v1';
 
 type LoginResponse = {
   token: string;
@@ -21,6 +23,14 @@ type RegisterResponse = {
     id: number;
     username: string;
   };
+};
+
+type MatchesQuery = {
+  date?: string;
+  from?: string;
+  to?: string;
+  tournament?: string | number;
+  search?: string;
 };
 
 type ApiErrorBody = {
@@ -68,6 +78,21 @@ const buildErrorMessage = (data?: ApiErrorBody) => {
   return JSON.stringify(data);
 };
 
+// Builds the full request URL based on demo mode and base URL.
+const buildUrl = (path: string) => {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  if (DEMO_MODE) {
+    return `/api/v1${normalized}`;
+  }
+  const trimmedBase = API_BASE_URL.endsWith('/')
+    ? API_BASE_URL.slice(0, -1)
+    : API_BASE_URL;
+  const [pathPart, query] = normalized.split('?');
+  const withSlash = pathPart.endsWith('/') ? pathPart : `${pathPart}/`;
+  const rebuilt = query ? `${withSlash}?${query}` : withSlash;
+  return `${trimmedBase}${rebuilt}`;
+};
+
 // Core fetch wrapper: merges headers, adds auth when needed, parses JSON.
 async function request<T>(
   path: string,
@@ -90,7 +115,7 @@ async function request<T>(
     }
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(buildUrl(path), {
     ...options,
     headers,
     cache: 'no-store',
@@ -120,7 +145,7 @@ export function authRequest<T>(path: string, options: RequestInit) {
 
 // Token login endpoint.
 export function login(username: string, password: string) {
-  return request<LoginResponse>('/api/v1/auth/token/', {
+  return request<LoginResponse>('/auth/token', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
@@ -128,7 +153,7 @@ export function login(username: string, password: string) {
 
 // Register endpoint (returns token + user).
 export function register(username: string, email: string, password: string) {
-  return request<RegisterResponse>('/api/v1/auth/register/', {
+  return request<RegisterResponse>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, email, password }),
   });
@@ -136,21 +161,46 @@ export function register(username: string, email: string, password: string) {
 
 // Feed endpoint for matches from followed teams.
 export function fetchFeed() {
-  return authRequest<FeedResponse>('/api/v1/feed/', {
+  return authRequest<FeedResponse>('/feed', {
+    method: 'GET',
+  });
+}
+
+// Matches catalog endpoint with optional filters.
+export function fetchMatches(filters: MatchesQuery = {}) {
+  const params = new URLSearchParams();
+  if (filters.date) {
+    params.set('date', filters.date);
+  }
+  if (filters.from) {
+    params.set('from', filters.from);
+  }
+  if (filters.to) {
+    params.set('to', filters.to);
+  }
+  if (filters.tournament) {
+    params.set('tournament', String(filters.tournament));
+  }
+  if (filters.search) {
+    params.set('search', filters.search);
+  }
+  const query = params.toString();
+  const path = query ? `/matches?${query}` : '/matches';
+  return authRequest<FeedResponse>(path, {
     method: 'GET',
   });
 }
 
 // Match detail endpoint with stats and reviews.
 export function fetchMatchDetail(matchId: number) {
-  return authRequest<MatchDetailResponse>(`/api/v1/matches/${matchId}/`, {
+  return authRequest<MatchDetailResponse>(`/matches/${matchId}`, {
     method: 'GET',
   });
 }
 
 // Profile endpoint for a username.
 export function fetchProfile(username: string) {
-  return authRequest<ProfileResponse>(`/api/v1/profile/${username}/`, {
+  return authRequest<ProfileResponse>(`/profile/${username}`, {
     method: 'GET',
   });
 }
@@ -158,7 +208,7 @@ export function fetchProfile(username: string) {
 // Profile stats tab endpoint.
 export function fetchProfileStats(username: string, range: string) {
   return authRequest<ProfileStatsResponse>(
-    `/api/v1/profile/${username}/stats/?range=${encodeURIComponent(range)}`,
+    `/profile/${username}/stats?range=${encodeURIComponent(range)}`,
     {
       method: 'GET',
     },
@@ -168,7 +218,7 @@ export function fetchProfileStats(username: string, range: string) {
 // Profile activity tab endpoint with optional range.
 export function fetchProfileActivity(username: string, range: string) {
   return authRequest<ProfileActivityResponse>(
-    `/api/v1/profile/${username}/activity/?range=${encodeURIComponent(range)}`,
+    `/profile/${username}/activity?range=${encodeURIComponent(range)}`,
     {
       method: 'GET',
     },
@@ -178,7 +228,7 @@ export function fetchProfileActivity(username: string, range: string) {
 // Profile highlights tab endpoint with optional range.
 export function fetchProfileHighlights(username: string, range: string) {
   return authRequest<ProfileHighlightsResponse>(
-    `/api/v1/profile/${username}/highlights/?range=${encodeURIComponent(range)}`,
+    `/profile/${username}/highlights?range=${encodeURIComponent(range)}`,
     {
       method: 'GET',
     },
@@ -197,7 +247,7 @@ export function rateMatch(
   payload: RatePayload,
   method: 'POST' | 'PATCH',
 ) {
-  return authRequest(`/api/v1/matches/${matchId}/rate/`, {
+  return authRequest(`/matches/${matchId}/rate`, {
     method,
     body: JSON.stringify(payload),
   });
