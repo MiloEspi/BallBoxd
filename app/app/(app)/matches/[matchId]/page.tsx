@@ -8,7 +8,7 @@ import { fetchMatchDetail } from '@/app/lib/api';
 import type { MatchDetailResponse } from '@/app/lib/types';
 
 type MatchPageProps = {
-  params: { matchId: string };
+  params: Promise<{ matchId: string }>;
 };
 
 // Formats match date for the detail header.
