@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes modal-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-backdrop {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(20);
+  }
+}
+
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
