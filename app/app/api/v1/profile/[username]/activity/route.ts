@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 import {
   filterRatingsByRange,
@@ -10,10 +11,14 @@ import {
   unauthorized,
 } from '../../../_demo';
 
+type RouteContext<T> = {
+  params: Promise<T>;
+};
+
 // Returns profile activity list for a given range.
 export async function GET(
-  request: Request,
-  { params }: { params: { username: string } },
+  request: NextRequest,
+  context: RouteContext<{ username: string }>,
 ) {
   const store = getDemoStore();
   const user = getAuthUser(request);
@@ -21,9 +26,8 @@ export async function GET(
     return unauthorized();
   }
 
-  const profileUser = store.users.find(
-    (item) => item.username === params.username,
-  );
+  const { username } = await context.params;
+  const profileUser = store.users.find((item) => item.username === username);
   if (!profileUser) {
     return NextResponse.json({ detail: 'User not found.' }, { status: 404 });
   }

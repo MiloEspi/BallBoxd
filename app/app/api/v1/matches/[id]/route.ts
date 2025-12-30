@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 import {
   getAuthUser,
@@ -9,13 +10,18 @@ import {
   toRating,
 } from '../../_demo';
 
+type RouteContext<T> = {
+  params: Promise<T>;
+};
+
 // Returns match details with stats and contextual ratings.
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } },
+  request: NextRequest,
+  context: RouteContext<{ id: string }>,
 ) {
   const store = getDemoStore();
-  const matchId = Number(params.id);
+  const { id } = await context.params;
+  const matchId = Number(id);
   if (Number.isNaN(matchId)) {
     return NextResponse.json({ detail: 'Match not found.' }, { status: 404 });
   }

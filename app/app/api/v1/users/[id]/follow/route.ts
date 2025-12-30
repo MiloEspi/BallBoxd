@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 import { getAuthUser, getDemoStore, unauthorized } from '../../../_demo';
 
+type RouteContext<T> = {
+  params: Promise<T>;
+};
+
 // Follows another user for the authenticated user.
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } },
+  request: NextRequest,
+  context: RouteContext<{ id: string }>,
 ) {
   const store = getDemoStore();
   const user = getAuthUser(request);
@@ -13,7 +18,8 @@ export async function POST(
     return unauthorized();
   }
 
-  const targetId = Number(params.id);
+  const { id } = await context.params;
+  const targetId = Number(id);
   if (Number.isNaN(targetId)) {
     return NextResponse.json({ detail: 'User not found.' }, { status: 404 });
   }
@@ -42,8 +48,8 @@ export async function POST(
 
 // Unfollows another user for the authenticated user.
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } },
+  request: NextRequest,
+  context: RouteContext<{ id: string }>,
 ) {
   const store = getDemoStore();
   const user = getAuthUser(request);
@@ -51,7 +57,8 @@ export async function DELETE(
     return unauthorized();
   }
 
-  const targetId = Number(params.id);
+  const { id } = await context.params;
+  const targetId = Number(id);
   if (Number.isNaN(targetId)) {
     return NextResponse.json({ detail: 'User not found.' }, { status: 404 });
   }

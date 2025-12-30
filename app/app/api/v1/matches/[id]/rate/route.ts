@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-import { getAuthUser, getDemoStore, getMatchById, toRating, unauthorized } from '../../../_demo';
+import {
+  getAuthUser,
+  getDemoStore,
+  getMatchById,
+  toRating,
+  unauthorized,
+} from '../../../_demo';
+
+type RouteContext<T> = {
+  params: Promise<T>;
+};
 
 type RatePayload = {
   score?: number;
@@ -10,8 +21,8 @@ type RatePayload = {
 
 // Creates a rating for the authenticated user.
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } },
+  request: NextRequest,
+  context: RouteContext<{ id: string }>,
 ) {
   const store = getDemoStore();
   const user = getAuthUser(request);
@@ -19,7 +30,8 @@ export async function POST(
     return unauthorized();
   }
 
-  const matchId = Number(params.id);
+  const { id } = await context.params;
+  const matchId = Number(id);
   if (Number.isNaN(matchId)) {
     return NextResponse.json({ detail: 'Match not found.' }, { status: 404 });
   }
@@ -66,8 +78,8 @@ export async function POST(
 
 // Updates a rating for the authenticated user.
 export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } },
+  request: NextRequest,
+  context: RouteContext<{ id: string }>,
 ) {
   const store = getDemoStore();
   const user = getAuthUser(request);
@@ -75,7 +87,8 @@ export async function PATCH(
     return unauthorized();
   }
 
-  const matchId = Number(params.id);
+  const { id } = await context.params;
+  const matchId = Number(id);
   if (Number.isNaN(matchId)) {
     return NextResponse.json({ detail: 'Match not found.' }, { status: 404 });
   }
