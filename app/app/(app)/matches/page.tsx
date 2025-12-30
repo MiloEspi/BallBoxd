@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import MatchCard from '@/app/components/match/MatchCard';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
-import { fetchFeed } from '@/app/lib/api';
+import { fetchMatches } from '@/app/lib/api';
 import type { Match } from '@/app/lib/types';
 import SegmentedControl from '@/app/ui/segmented-control';
 
@@ -53,12 +53,12 @@ export default function Page() {
     y: number;
   } | null>(null);
 
-  // Loads matches (currently reusing the feed endpoint).
+  // Loads the full matches catalog.
   const loadMatches = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchFeed();
+      const data = await fetchMatches();
       setMatches(data.results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load matches.');

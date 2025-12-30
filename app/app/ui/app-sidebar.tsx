@@ -11,6 +11,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: '/feed', label: 'Feed' },
   { href: '/matches', label: 'Partidos' },
+  { href: '/teams', label: 'Equipos' },
   { href: '/profile/camilo', label: 'Perfil' },
 ];
 

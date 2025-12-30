@@ -6,9 +6,10 @@ import type {
   ProfileHighlightsResponse,
   ProfileResponse,
   ProfileStatsResponse,
+  TeamsResponse,
 } from './types';
 
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'false';
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 const API_BASE_URL = DEMO_MODE
   ? ''
   : process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api/v1';
@@ -235,6 +236,13 @@ export function fetchProfileHighlights(username: string, range: string) {
   );
 }
 
+// Teams catalog endpoint with follow status when authenticated.
+export function fetchTeams() {
+  return authRequest<TeamsResponse>('/teams', {
+    method: 'GET',
+  });
+}
+
 type RatePayload = {
   score: number;
   minutes_watched: string;
@@ -250,5 +258,18 @@ export function rateMatch(
   return authRequest(`/matches/${matchId}/rate`, {
     method,
     body: JSON.stringify(payload),
+  });
+}
+
+// Follow/unfollow team endpoints.
+export function followTeam(teamId: number) {
+  return authRequest(`/teams/${teamId}/follow`, {
+    method: 'POST',
+  });
+}
+
+export function unfollowTeam(teamId: number) {
+  return authRequest(`/teams/${teamId}/follow`, {
+    method: 'DELETE',
   });
 }

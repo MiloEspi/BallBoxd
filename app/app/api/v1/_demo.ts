@@ -377,12 +377,25 @@ export const toTeam = (store: DemoStore, teamId: number) => {
   return { id: team.id, name: team.name, country: team.country };
 };
 
+// Computes average rating and count for a match.
+const getMatchAverages = (store: DemoStore, matchId: number) => {
+  const ratings = store.ratings.filter((rating) => rating.matchId === matchId);
+  const ratingCount = ratings.length;
+  const avgScore = ratingCount
+    ? roundToTwo(
+        ratings.reduce((sum, rating) => sum + rating.score, 0) / ratingCount,
+      )
+    : 0;
+  return { avgScore, ratingCount };
+};
+
 // Builds a match payload with nested team and tournament data.
 export const toMatch = (
   store: DemoStore,
   match: DemoMatch,
   userId?: number,
 ) => {
+  const stats = getMatchAverages(store, match.id);
   const base = {
     id: match.id,
     tournament: toTournament(store, match.tournamentId),
@@ -391,6 +404,8 @@ export const toMatch = (
     date_time: match.date_time,
     home_score: match.home_score,
     away_score: match.away_score,
+    avg_score: stats.avgScore,
+    rating_count: stats.ratingCount,
   };
 
   if (!userId) {

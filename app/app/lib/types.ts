@@ -8,6 +8,7 @@ export type Team = {
   id: number;
   name: string;
   country: string;
+  is_following?: boolean;
 };
 
 export type Tournament = {
@@ -45,6 +46,11 @@ export type Match = {
 export type FeedResponse = {
   count: number;
   results: Match[];
+};
+
+export type TeamsResponse = {
+  count: number;
+  results: Team[];
 };
 
 export type MatchDetailResponse = {

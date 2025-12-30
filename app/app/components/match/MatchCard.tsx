@@ -28,16 +28,22 @@ const getTournamentAbbr = (name: string) => {
     .toUpperCase();
 };
 
-// Renders a single match card with rating glow and CTA buttons.
-// Renders a single match card with rating glow and CTA buttons.
+// Renders a single match card with average rating and CTA buttons.
 export default function MatchCard({ match, onRate }: MatchCardProps) {
   const router = useRouter();
-  const avgScore =
-    match.avg_score !== undefined ? Math.round(match.avg_score) : null;
+  const avgScore = Number.isFinite(match.avg_score) ? match.avg_score : 0;
+  const avgDisplay = Number.isInteger(avgScore)
+    ? String(avgScore)
+    : avgScore.toFixed(1);
   const hasMyRating = match.my_rating?.score !== undefined;
-  const ratingValue = avgScore ?? (hasMyRating ? match.my_rating!.score : '--');
-  const ratingLabel =
-    avgScore !== null ? 'Avg score' : hasMyRating ? 'Your rating' : 'No rating';
+  const myScore = hasMyRating ? match.my_rating!.score : null;
+  const myDisplay =
+    myScore !== null && Number.isInteger(myScore)
+      ? String(myScore)
+      : myScore !== null
+        ? myScore.toFixed(1)
+        : '';
+  const ratingLabel = 'Avg rating';
   const ratingCount =
     match.rating_count !== undefined ? `${match.rating_count} ratings` : '';
 
@@ -75,15 +81,33 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-8">
-        <div className="relative">
-          <div className="pointer-events-none absolute -inset-6 rounded-full bg-[conic-gradient(at_top,_#22d3ee,_#34d399,_#facc15,_#22d3ee)] opacity-30 blur-2xl transition duration-300 animate-[spin_18s_linear_infinite] group-hover:opacity-70 group-hover:blur-3xl" />
-          <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-4xl font-semibold text-white shadow-[0_0_30px_rgba(34,211,238,0.2)]">
-            {ratingValue}
+        <div className="flex flex-wrap items-center gap-6">
+          <div>
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-4xl font-semibold text-white shadow-[0_0_22px_rgba(15,23,42,0.6)]">
+              {avgDisplay}
+            </div>
+            <div className="mt-3 text-xs text-slate-400">
+              <span className="uppercase tracking-[0.2em]">{ratingLabel}</span>
+              {ratingCount && (
+                <span className="ml-2 text-slate-500">{ratingCount}</span>
+              )}
+            </div>
           </div>
-          <div className="mt-3 text-xs text-slate-400">
-            <span className="uppercase tracking-[0.2em]">{ratingLabel}</span>
-            {ratingCount && (
-              <span className="ml-2 text-slate-500">{ratingCount}</span>
+
+          <div className="min-w-[120px]">
+            {hasMyRating ? (
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-300 text-sm font-semibold text-slate-900">
+                  {myDisplay}
+                </div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Your rating
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Haven&apos;t rated
+              </div>
             )}
           </div>
         </div>
