@@ -22,14 +22,11 @@ export default function AppSidebar() {
   return (
     <>
       <nav className="sticky top-0 z-30 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur md:hidden">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">
-              BallBoxd
-            </p>
-            <p className="text-base font-semibold text-white">Panel</p>
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <div className="text-[10px] uppercase tracking-[0.35em] text-slate-500">
+            BallBoxd
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
+          <div className="flex flex-1 flex-wrap justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-200">
             {navItems.map((item) => {
               const isActive =
                 pathname === item.href ||
