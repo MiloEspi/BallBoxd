@@ -100,6 +100,8 @@ export default function Page({ params }: MatchPageProps) {
   }
 
   const { match, avg_score, rating_count, full_watched_pct, my_rating } = data;
+  const avgDisplay =
+    Math.round(avg_score) === avg_score ? String(avg_score) : avg_score.toFixed(1);
 
   return (
     <section className="space-y-8">
@@ -123,14 +125,22 @@ export default function Page({ params }: MatchPageProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-6">
+            <div className="text-center">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                Average rating
+              </p>
+              <div className="relative mt-2 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 text-xl font-semibold text-white shadow-[0_0_30px_rgba(34,211,238,0.25)]">
+                <span className="pointer-events-none absolute -inset-4 rounded-full bg-[conic-gradient(at_top,_#22d3ee,_#34d399,_#facc15,_#22d3ee)] opacity-30 blur-xl animate-[spin_12s_linear_infinite]" />
+                <span className="relative">{avgDisplay}</span>
+              </div>
+            </div>
             {my_rating && (
               <div className="text-center">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                   Your rating
                 </p>
-                <div className="relative mt-2 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 text-xl font-semibold text-white shadow-[0_0_30px_rgba(34,211,238,0.25)]">
-                  <span className="pointer-events-none absolute -inset-4 rounded-full bg-[conic-gradient(at_top,_#22d3ee,_#34d399,_#facc15,_#22d3ee)] opacity-30 blur-xl animate-[spin_12s_linear_infinite]" />
-                  <span className="relative">{my_rating.score}</span>
+                <div className="mt-2 flex h-10 w-10 items-center justify-center rounded-full bg-sky-300 text-sm font-semibold text-slate-900">
+                  {my_rating.score}
                 </div>
               </div>
             )}
@@ -154,7 +164,6 @@ export default function Page({ params }: MatchPageProps) {
 
       <div className="grid gap-4 md:grid-cols-3">
         {[
-          { label: 'Average rating', value: Math.round(avg_score) },
           { label: 'Total ratings', value: rating_count },
           { label: 'Full watched %', value: `${full_watched_pct}%` },
         ].map((stat) => (
