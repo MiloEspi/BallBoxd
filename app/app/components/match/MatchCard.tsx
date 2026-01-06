@@ -52,7 +52,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         ? myScore.toFixed(1)
         : '';
   const ratingLabel = 'Avg rating';
-  const ratingCountLabel = hasRatings ? `${ratingCount} ratings` : 'No ratings yet';
+  const ratingCountLabel = `${ratingCount} ratings`;
   const statusMeta = getStatusMeta(match.status, match.date_time);
   const { dateLabel, timeLabel } = formatKickoff(match.date_time);
   const statusToneStyles: Record<typeof statusMeta.tone, string> = {
@@ -73,7 +73,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
 
   return (
     <article
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950 via-slate-900/80 to-slate-950 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.35)] transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01] hover:border-slate-500 hover:shadow-[0_28px_70px_rgba(0,0,0,0.45)]"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950 via-slate-900/80 to-slate-950 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.35)] transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01] hover:border-slate-500 hover:shadow-[0_28px_70px_rgba(0,0,0,0.45)]"
       onClick={() => router.push(`/matches/${match.id}`)}
       role="button"
       tabIndex={0}
@@ -90,7 +90,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.12),_transparent_55%)]" />
       </div>
 
-      <header className="relative flex flex-wrap items-start justify-between gap-4">
+      <header className="relative flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
             <span className="rounded-full border border-slate-700/80 bg-slate-900/60 px-2 py-1 text-[10px] font-semibold text-slate-100">
@@ -100,12 +100,12 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
               {match.tournament.name}
             </span>
           </div>
-          <div className="mt-3 text-2xl font-semibold text-white">
+          <div className="mt-2 text-xl font-semibold text-white">
             {dateLabel}
             <span className="text-slate-400"> - {timeLabel}</span>
           </div>
           {match.venue && (
-            <p className="mt-1 text-sm text-slate-400">{match.venue}</p>
+            <p className="mt-1 text-xs text-slate-400">{match.venue}</p>
           )}
         </div>
         <span
@@ -115,45 +115,42 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         </span>
       </header>
 
-      <div className="mt-6 space-y-4">
-        <div className="space-y-3">
+      <div className="mt-4 space-y-3">
+        <div className="space-y-2">
           {[{ team: match.home_team, score: match.home_score }, { team: match.away_team, score: match.away_score }].map(
             ({ team, score }) => (
               <div
                 key={team.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/70 bg-slate-950/50 px-4 py-2.5"
+                className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/70 bg-slate-950/50 px-4 py-2"
               >
                 <Link
                   href={`/teams/${team.id}`}
                   className="flex min-w-0 items-center gap-3 text-left text-slate-100 transition hover:text-white"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
                     {team.logo_url ? (
                       <img
                         src={team.logo_url}
                         alt={team.name}
-                        className="h-8 w-8 object-contain"
+                        className="h-7 w-7 object-contain"
                       />
                     ) : (
                       getTeamInitials(team.name)
                     )}
                   </span>
-                  <span className="truncate text-base font-semibold">
+                  <span className="truncate text-sm font-semibold">
                     {team.name}
                   </span>
                 </Link>
-                <span className="text-3xl font-semibold text-white">{score}</span>
+                <span className="text-2xl font-semibold text-white">{score}</span>
               </div>
             ),
           )}
         </div>
 
         <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            {ratingLabel}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative">
                 <div className="pointer-events-none absolute -inset-5 rounded-full bg-emerald-400/20 blur-2xl" />
@@ -170,38 +167,29 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
                   </div>
                 </div>
               </div>
-              <div>
-                <div className="text-sm font-semibold text-slate-100">
-                  {ratingCountLabel}
+              {hasRatings && (
+                <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                  {ratingLabel} · {ratingCountLabel}
                 </div>
-                {!hasRatings && (
-                  <div className="mt-1 text-xs text-slate-500">
-                    There are no ratings yet.
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-            {hasMyRating ? (
+            {hasMyRating && (
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-300 text-sm font-semibold text-slate-900">
-                  {myDisplay}
-                </div>
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
                   Your rating
                 </div>
-              </div>
-            ) : (
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Haven&apos;t rated
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-300 text-xs font-semibold text-slate-900">
+                  {myDisplay}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-3 flex flex-wrap gap-3">
         <button
-          className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_10px_25px_rgba(255,255,255,0.2)] transition hover:-translate-y-0.5 hover:bg-slate-200 active:translate-y-0 active:scale-[0.98]"
+          className="rounded-full bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_10px_25px_rgba(255,255,255,0.2)] transition hover:-translate-y-0.5 hover:bg-slate-200 active:translate-y-0 active:scale-[0.98]"
           type="button"
           onClick={(event) => {
             event.stopPropagation();
@@ -214,9 +202,6 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         >
           {match.my_rating ? 'Update rating' : 'Rate match'}
         </button>
-        <div className="rounded-full border border-slate-700 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition group-hover:border-slate-500">
-          Tap for details
-        </div>
       </div>
     </article>
   );
