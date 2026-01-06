@@ -59,19 +59,18 @@ export default function FeaturedMatchCard({
   const stadium = rating.attended ? rating.stadium_photo_url ?? '' : '';
   const hasRepresentative = Boolean(representative);
   const hasStadium = Boolean(stadium);
+  const canSwap = hasRepresentative && hasStadium;
   const primaryChoice = rating.featured_primary_image ?? 'representative';
   const primary =
-    primaryChoice === 'stadium' && hasStadium
-      ? stadium
-      : representative || stadium;
-  const secondary =
-    primary === representative && hasStadium
-      ? stadium
-      : primary === stadium && hasRepresentative
-        ? representative
-        : '';
-  const showBadge = hasRepresentative && hasStadium;
+    primaryChoice === 'stadium' && canSwap ? stadium : representative;
+  const secondary = canSwap
+    ? primaryChoice === 'stadium'
+      ? representative
+      : stadium
+    : '';
+  const showBadge = canSwap;
   const note = rating.featured_note?.trim() || rating.review?.trim() || '';
+  const ringPercent = Math.min(100, Math.max(0, rating.score ?? 0));
 
   return (
     <div
@@ -92,31 +91,41 @@ export default function FeaturedMatchCard({
       </div>
 
       <div className="relative grid">
-        <div className="flex min-h-[140px] flex-col justify-between gap-3 px-5 pb-4 pt-5">
+        <div className="flex flex-col gap-2 px-4 pb-3 pt-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">
                 {match.tournament.name}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-[11px] text-slate-500">
                 {formatDate(match.date_time)}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-                {rating.score}
-              </span>
+            <div className="flex flex-col items-end gap-2">
+              <div className="relative">
+                <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-2xl" />
+                <div
+                  className="relative flex h-11 w-11 items-center justify-center rounded-full p-[3px] shadow-[0_0_18px_rgba(255,255,255,0.22)]"
+                  style={{
+                    background: `conic-gradient(rgba(255,255,255,0.95) ${ringPercent}%, rgba(255,255,255,0.08) ${ringPercent}% 100%)`,
+                  }}
+                >
+                  <div className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-slate-950 text-sm font-semibold text-white">
+                    {rating.score}
+                  </div>
+                </div>
+              </div>
               {isOwner && (
                 <div className="flex items-center gap-2">
                   <button
-                    className="rounded-full border border-slate-700 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
+                    className="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
                     type="button"
                     onClick={() => onEdit?.(rating)}
                   >
                     Editar
                   </button>
                   <button
-                    className="rounded-full border border-rose-400/40 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-rose-200 transition hover:border-rose-300"
+                    className="rounded-full border border-rose-400/40 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-rose-200 transition hover:border-rose-300"
                     type="button"
                     onClick={() => onRemove?.(match.id)}
                   >
@@ -128,7 +137,7 @@ export default function FeaturedMatchCard({
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <div className="text-base font-semibold text-white">
+            <div className="min-w-0 text-sm font-semibold text-white truncate">
               {match.home_team.name} vs {match.away_team.name}
             </div>
             <div className="text-sm font-semibold text-slate-200">
@@ -145,36 +154,40 @@ export default function FeaturedMatchCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-slate-900/60 text-xs uppercase tracking-[0.3em] text-slate-500">
-              Sin imagen
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-900/60 text-[10px] uppercase tracking-[0.3em] text-slate-500">
+              Imagen destacada
+              {isOwner && (
+                <button
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[9px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/40"
+                  type="button"
+                  onClick={() => onEdit?.(rating)}
+                >
+                  Agregar imagen
+                </button>
+              )}
             </div>
           )}
 
           {note && (
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent px-4 pb-4 pt-8">
-              <p className="text-sm text-slate-100">{note}</p>
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent px-3 pb-3 pt-6">
+              <p className="max-h-[32px] overflow-hidden text-[11px] leading-snug text-slate-100">
+                {note}
+              </p>
             </div>
           )}
 
           {showBadge && (
-            <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
               <StadiumIcon />
               Estuve ahi
             </div>
           )}
 
           {secondary && (
-            <div className="absolute bottom-4 right-4">
-              <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-slate-900/70 shadow-[0_10px_25px_rgba(0,0,0,0.35)]">
-                <img
-                  src={secondary}
-                  alt="Imagen secundaria"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              {isOwner && onSwapPrimary && (
+            <div className="absolute bottom-3 right-3">
+              {isOwner && onSwapPrimary ? (
                 <button
-                  className="mt-2 w-full rounded-full border border-slate-700 bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+                  className="group relative h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-slate-900/70 shadow-[0_10px_25px_rgba(0,0,0,0.35)]"
                   type="button"
                   onClick={() =>
                     onSwapPrimary(
@@ -183,14 +196,29 @@ export default function FeaturedMatchCard({
                     )
                   }
                 >
-                  Swap
+                  <img
+                    src={secondary}
+                    alt="Imagen secundaria"
+                    className="h-full w-full object-cover"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-[9px] uppercase tracking-[0.2em] text-white opacity-0 transition group-hover:opacity-100">
+                    Swap
+                  </span>
                 </button>
+              ) : (
+                <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-slate-900/70 shadow-[0_10px_25px_rgba(0,0,0,0.35)]">
+                  <img
+                    src={secondary}
+                    alt="Imagen secundaria"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
               )}
             </div>
           )}
 
           {isOwner && (
-            <div className="absolute bottom-4 left-4 rounded-full border border-white/10 bg-slate-900/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">
+            <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-300">
               Arrastra
             </div>
           )}

@@ -34,6 +34,9 @@ export default function ProfileMemoriesSection({
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [pendingEditMatchId, setPendingEditMatchId] = useState<number | null>(
+    null,
+  );
 
   const featuredMatches = useMemo(
     () => (data?.results ?? []).slice().sort((a, b) => {
@@ -74,9 +77,25 @@ export default function ProfileMemoriesSection({
     loadOwner();
   }, [username]);
 
+  useEffect(() => {
+    if (!pendingEditMatchId || !data) {
+      return;
+    }
+    const next = data.results.find(
+      (item) => item.match.id === pendingEditMatchId,
+    );
+    if (next) {
+      setEditing(next);
+      setPendingEditMatchId(null);
+    } else {
+      setPendingEditMatchId(null);
+    }
+  }, [data, pendingEditMatchId]);
+
   const handleAdd = async (matchId: number, replaceMatchId?: number) => {
     const response = await addProfileMemory(username, matchId, replaceMatchId);
     setData(response);
+    setPendingEditMatchId(matchId);
   };
 
   const handleRemove = async (matchId: number) => {
@@ -172,13 +191,13 @@ export default function ProfileMemoriesSection({
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
             Mis partidos
           </p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Partidos que me marcaron
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonBlock key={`memories-skeleton-${index}`} className="h-80" />
+            <SkeletonBlock key={`memories-skeleton-${index}`} className="h-64" />
           ))}
         </div>
       </section>
@@ -198,19 +217,19 @@ export default function ProfileMemoriesSection({
   }
 
   return (
-    <section className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
             Mis partidos
           </p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Partidos que me marcaron
           </p>
         </div>
         {isOwner && (
           <button
-            className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200"
+            className="rounded-full bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200"
             type="button"
             onClick={() => setShowSelector(true)}
             disabled={reordering}
@@ -220,32 +239,50 @@ export default function ProfileMemoriesSection({
         )}
       </div>
 
-      {featuredMatches.length === 0 ? (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          {isOwner
-            ? 'Todavia no elegiste partidos destacados.'
-            : 'Este perfil aun no tiene partidos destacados.'}
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {featuredMatches.map((rating) => (
-            <FeaturedMatchCard
-              key={rating.id}
-              rating={rating}
-              isOwner={isOwner}
-              isDragging={draggingId === rating.match.id}
-              isDragOver={dragOverId === rating.match.id}
-              onEdit={setEditing}
-              onRemove={handleRemove}
-              onSwapPrimary={handleSwapPrimary}
-              onDragStart={handleDragStart(rating.match.id)}
-              onDragOver={handleDragOver(rating.match.id)}
-              onDrop={handleDrop(rating.match.id)}
-              onDragEnd={handleDragEnd}
-            />
-          ))}
-        </div>
-      )}
+      <div className="grid gap-3 grid-cols-2">
+        {Array.from({ length: 4 }).map((_, index) => {
+          const rating = featuredMatches[index] ?? null;
+          if (rating) {
+            return (
+              <FeaturedMatchCard
+                key={rating.id}
+                rating={rating}
+                isOwner={isOwner}
+                isDragging={draggingId === rating.match.id}
+                isDragOver={dragOverId === rating.match.id}
+                onEdit={setEditing}
+                onRemove={handleRemove}
+                onSwapPrimary={handleSwapPrimary}
+                onDragStart={handleDragStart(rating.match.id)}
+                onDragOver={handleDragOver(rating.match.id)}
+                onDrop={handleDrop(rating.match.id)}
+                onDragEnd={handleDragEnd}
+              />
+            );
+          }
+          return (
+            <div
+              key={`memories-slot-${index}`}
+              className="flex flex-col overflow-hidden rounded-3xl border border-dashed border-slate-800 bg-slate-950/40"
+            >
+              <div className="h-16 border-b border-dashed border-slate-800/80" />
+              <div className="flex aspect-square items-center justify-center text-center text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                {isOwner ? (
+                  <button
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/30"
+                    type="button"
+                    onClick={() => setShowSelector(true)}
+                  >
+                    Agregar partido
+                  </button>
+                ) : (
+                  <span>Sin partido</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       {showSelector && (
         <FeaturedMatchSelectorModal

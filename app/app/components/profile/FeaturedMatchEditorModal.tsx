@@ -37,6 +37,10 @@ export default function FeaturedMatchEditorModal({
 
   const handleSave = async () => {
     setError('');
+    if (!representative) {
+      setError('La imagen destacada es obligatoria.');
+      return;
+    }
     setSaving(true);
     try {
       await updateProfileMemory(username, rating.match.id, {
@@ -57,6 +61,14 @@ export default function FeaturedMatchEditorModal({
     setMounted(true);
   }, []);
 
+  const handleClose = () => {
+    if (!representative) {
+      setError('La imagen destacada es obligatoria.');
+      return;
+    }
+    onClose();
+  };
+
   if (!mounted) {
     return null;
   }
@@ -67,7 +79,7 @@ export default function FeaturedMatchEditorModal({
       style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          onClose();
+          handleClose();
         }
       }}
     >
@@ -85,7 +97,7 @@ export default function FeaturedMatchEditorModal({
             <button
               className="text-sm text-slate-500 transition hover:text-slate-200"
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
             >
               Cerrar
             </button>
@@ -109,8 +121,8 @@ export default function FeaturedMatchEditorModal({
             </div>
 
             <ImageUpload
-              label="Imagen representativa"
-              helper="Usa una imagen iconica del partido."
+              label="Imagen destacada (obligatoria)"
+              helper="La imagen que representa el partido en tu perfil."
               value={representative}
               onChange={(value) => {
                 setRepresentative(value);
@@ -120,9 +132,7 @@ export default function FeaturedMatchEditorModal({
               }}
               onClear={() => {
                 setRepresentative('');
-                if (hasStadium) {
-                  setPrimary('stadium');
-                }
+                setPrimary('representative');
               }}
               disabled={saving}
             />
@@ -173,7 +183,7 @@ export default function FeaturedMatchEditorModal({
             <button
               className="rounded-full border border-slate-700 px-5 py-2 text-xs uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={saving}
             >
               Cancelar

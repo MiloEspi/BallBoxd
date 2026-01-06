@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import ImageUpload from '@/app/components/ui/ImageUpload';
 import { updateMatchMemory } from '@/app/lib/api';
+import { processSquareImage } from '@/app/lib/image';
 import type { Rating } from '@/app/lib/types';
 
 type MatchMemoryPanelProps = {
@@ -13,31 +13,33 @@ type MatchMemoryPanelProps = {
   onUpdated: () => void;
 };
 
-// Per-match memory panel for attendance and photo.
+// Compact attendance control with optional stadium photo.
 export default function MatchMemoryPanel({
   matchId,
   rating,
   onRequireRating,
   onUpdated,
 }: MatchMemoryPanelProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [attended, setAttended] = useState(Boolean(rating?.attended));
   const [photo, setPhoto] = useState(rating?.stadium_photo_url ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     setAttended(Boolean(rating?.attended));
     setPhoto(rating?.stadium_photo_url ?? '');
   }, [rating?.attended, rating?.stadium_photo_url]);
 
-  const toggleAttended = async () => {
+  const handleToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!rating) {
       onRequireRating();
       return;
     }
-    setError('');
-    const nextValue = !attended;
+    const nextValue = event.target.checked;
     setAttended(nextValue);
+    setError('');
     setSaving(true);
     try {
       await updateMatchMemory(matchId, { attended: nextValue });
@@ -50,25 +52,39 @@ export default function MatchMemoryPanel({
     }
   };
 
-  const handlePhotoChange = async (value: string) => {
+  const handlePickFile = () => {
+    if (!saving) {
+      inputRef.current?.click();
+    }
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
     if (!rating) {
       onRequireRating();
       return;
     }
-    setError('');
     setSaving(true);
-    setPhoto(value);
+    setError('');
     try {
+      const nextValue = await processSquareImage(file, 800);
       await updateMatchMemory(matchId, {
         attended: true,
-        stadium_photo_url: value,
+        stadium_photo_url: nextValue,
       });
       setAttended(true);
+      setPhoto(nextValue);
       onUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No pudimos guardar.');
     } finally {
       setSaving(false);
+      event.target.value = '';
     }
   };
 
@@ -77,13 +93,11 @@ export default function MatchMemoryPanel({
       onRequireRating();
       return;
     }
-    setError('');
     setSaving(true);
-    setPhoto('');
+    setError('');
     try {
-      await updateMatchMemory(matchId, {
-        stadium_photo_url: '',
-      });
+      await updateMatchMemory(matchId, { stadium_photo_url: '' });
+      setPhoto('');
       onUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No pudimos guardar.');
@@ -93,44 +107,55 @@ export default function MatchMemoryPanel({
   };
 
   return (
-    <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Estuve en la cancha
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            Marca si fuiste y suma una foto desde la tribuna.
-          </p>
-        </div>
-        <button
-          className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-            attended
-              ? 'border-emerald-400/60 bg-emerald-400/10 text-emerald-100'
-              : 'border-slate-700 text-slate-300 hover:border-slate-500'
-          }`}
-          type="button"
-          onClick={toggleAttended}
-          disabled={saving}
-        >
-          {attended ? 'Si, estuve ahi' : 'No estuve'}
-        </button>
-      </div>
-
-      {attended && (
-        <ImageUpload
-          label="Foto desde mi lugar"
-          helper="Solo una imagen, formato cuadrado."
-          value={photo}
-          onChange={handlePhotoChange}
-          onClear={photo ? handlePhotoClear : undefined}
+    <div className="space-y-2">
+      <label className="flex items-center justify-between gap-4">
+        <span className="text-[11px] uppercase tracking-[0.25em] text-slate-400">
+          Estuve en la cancha
+        </span>
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-slate-600 bg-slate-950 text-emerald-300 focus:ring-emerald-300/40"
+          checked={attended}
+          onChange={handleToggle}
           disabled={saving}
         />
-      )}
+      </label>
 
-      {!rating && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
-          Para activar esta opcion primero valora el partido.
+      {attended && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {photo && (
+              <button
+                className="h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+              >
+                <img
+                  src={photo}
+                  alt="Foto desde la cancha"
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            )}
+            <button
+              className="rounded-full border border-slate-700 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+              type="button"
+              onClick={handlePickFile}
+              disabled={saving}
+            >
+              {photo ? 'Cambiar archivo' : 'Subir archivo'}
+            </button>
+          </div>
+          {photo && (
+            <button
+              className="text-[10px] uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
+              type="button"
+              onClick={handlePhotoClear}
+              disabled={saving}
+            >
+              Quitar
+            </button>
+          )}
         </div>
       )}
 
@@ -139,6 +164,40 @@ export default function MatchMemoryPanel({
           {error}
         </div>
       )}
-    </section>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+        disabled={saving}
+      />
+
+      {previewOpen && photo && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="relative max-h-[80vh] max-w-[80vw]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={photo}
+              alt="Foto desde la cancha"
+              className="h-full w-full rounded-2xl object-cover shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
+            />
+            <button
+              className="absolute -right-3 -top-3 rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200"
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

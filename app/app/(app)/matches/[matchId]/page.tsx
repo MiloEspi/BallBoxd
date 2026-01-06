@@ -239,7 +239,7 @@ export default function Page({ params }: MatchPageProps) {
             </div>
           </div>
 
-          <div className="flex flex-col justify-between gap-6">
+          <div className="flex flex-col gap-5">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                 Average rating
@@ -298,16 +298,18 @@ export default function Page({ params }: MatchPageProps) {
                 {my_rating ? 'Update rating' : 'Rate match'}
               </button>
             </div>
+
+            <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 px-3 py-2">
+              <MatchMemoryPanel
+                matchId={match.id}
+                rating={my_rating}
+                onRequireRating={() => openRateModal()}
+                onUpdated={loadMatch}
+              />
+            </div>
           </div>
         </div>
       </div>
-
-      <MatchMemoryPanel
-        matchId={match.id}
-        rating={my_rating}
-        onRequireRating={() => openRateModal()}
-        onUpdated={loadMatch}
-      />
 
       <div className="grid gap-4 md:grid-cols-3">
         {[
