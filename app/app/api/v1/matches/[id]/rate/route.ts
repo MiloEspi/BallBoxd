@@ -73,7 +73,7 @@ export async function POST(
     representative_photo_url: '',
     featured_note: '',
     featured_order: null,
-    featured_primary_image: 'representative',
+    featured_primary_image: 'representative' as const,
     created_at: new Date().toISOString(),
   };
   store.nextIds.rating += 1;
