@@ -9,13 +9,25 @@ class Tournament(models.Model):
 
     name = models.CharField(max_length=120)
     country = models.CharField(max_length=80, blank=True, default="")
+    external_id = models.PositiveIntegerField(null=True, blank=True)
+    code = models.CharField(max_length=12, blank=True, default="")
+    logo_url = models.URLField(blank=True, default="")
 
     class Meta:
+        indexes = [
+            models.Index(fields=["external_id"]),
+            models.Index(fields=["code"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["name", "country"],
                 name="uniq_tournament_name_country",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["external_id"],
+                condition=Q(external_id__isnull=False),
+                name="uniq_tournament_external_id",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -25,14 +37,29 @@ class Tournament(models.Model):
 
 
 class Team(models.Model):
-    name = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
     country = models.CharField(max_length=80, blank=True, default="")
+    external_id = models.PositiveIntegerField(null=True, blank=True)
+    logo_url = models.URLField(blank=True, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["external_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["external_id"],
+                condition=Q(external_id__isnull=False),
+                name="uniq_team_external_id",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
 
 
 class Match(models.Model):
+    external_id = models.PositiveIntegerField(null=True, blank=True)
     tournament = models.ForeignKey(
         Tournament,
         on_delete=models.PROTECT,
@@ -49,11 +76,14 @@ class Match(models.Model):
         related_name="away_matches",
     )
     date_time = models.DateTimeField()
+    venue = models.CharField(max_length=120, blank=True, default="")
+    status = models.CharField(max_length=20, blank=True, default="")
     home_score = models.PositiveSmallIntegerField(default=0)
     away_score = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         indexes = [
+            models.Index(fields=["external_id"]),
             models.Index(fields=["date_time"]),
             models.Index(fields=["tournament", "date_time"]),
             models.Index(fields=["home_team", "date_time"]),
@@ -67,6 +97,11 @@ class Match(models.Model):
             models.UniqueConstraint(
                 fields=["tournament", "date_time", "home_team", "away_team"],
                 name="uniq_match_identity",
+            ),
+            models.UniqueConstraint(
+                fields=["external_id"],
+                condition=Q(external_id__isnull=False),
+                name="uniq_match_external_id",
             ),
         ]
 

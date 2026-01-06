@@ -1,13 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import {
+  ApiError,
   fetchProfileActivity,
   fetchProfileHighlights,
   fetchProfileStats,
 } from '@/app/lib/api';
+import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
+import StateEmpty from '@/app/components/ui/StateEmpty';
+import StateError from '@/app/components/ui/StateError';
+import MatchSummaryCard from '@/app/components/match/MatchSummaryCard';
 import type {
   ProfileActivityResponse,
   ProfileHighlightsResponse,
@@ -23,26 +28,34 @@ type ProfilePageParams = {
 
 type TabKey = 'stats' | 'activity' | 'highlights';
 type RangeKey = 'week' | 'month' | 'year';
+type ErrorState = {
+  message: string;
+  action: 'retry' | 'login';
+};
 
 type StatsPanelProps = {
   data: ProfileStatsResponse | null;
   loading: boolean;
-  error: string;
+  error: ErrorState | null;
   onRetry: () => void;
+  onLogin: () => void;
 };
 
 type ActivityPanelProps = {
   data: ProfileActivityResponse | null;
   loading: boolean;
-  error: string;
+  error: ErrorState | null;
   onRetry: () => void;
+  onLogin: () => void;
+  onExplore: () => void;
 };
 
 type HighlightsPanelProps = {
   data: ProfileHighlightsResponse | null;
   loading: boolean;
-  error: string;
+  error: ErrorState | null;
   onRetry: () => void;
+  onLogin: () => void;
 };
 
 type StatCardItem = {
@@ -72,32 +85,6 @@ const TEAM_COLORS = [
   '#38BDF8',
 ];
 
-// Formats ISO date strings into a readable label.
-const formatDate = (value: string) => {
-  const date = new Date(value);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-// Maps minutes watched codes to UI labels.
-const formatMinutes = (value: string) => {
-  switch (value) {
-    case 'LT_30':
-      return 'Less than 30';
-    case 'ONE_HALF':
-      return 'One half';
-    case 'ALMOST_ALL':
-      return 'Almost all';
-    case 'FULL':
-      return 'Full match';
-    default:
-      return value;
-  }
-};
-
 // Extracts a usable username from Next.js route params.
 const getUsernameFromParams = (params: ProfilePageParams) => {
   const usernameParam = params?.username;
@@ -112,33 +99,7 @@ const getUsernameFromParams = (params: ProfilePageParams) => {
 
 // Renders a single activity row card.
 const renderActivityCard = (rating: RatingWithMatch) => (
-  <article
-    key={rating.id}
-    className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-  >
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-base font-semibold text-white">
-          {rating.match.home_team.name} vs {rating.match.away_team.name}
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          {rating.match.tournament.name} - {formatDate(rating.match.date_time)}
-        </p>
-      </div>
-      <span className="text-2xl font-semibold text-white">
-        {rating.score}
-      </span>
-    </div>
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-      <span className="rounded-full border border-slate-700 px-3 py-1 uppercase tracking-[0.2em] text-slate-400">
-        {formatMinutes(rating.minutes_watched)}
-      </span>
-      <span>{formatDate(rating.created_at)}</span>
-    </div>
-    {rating.review && (
-      <p className="mt-3 text-sm text-slate-300">{rating.review}</p>
-    )}
-  </article>
+  <MatchSummaryCard key={rating.id} rating={rating} />
 );
 
 // Renders a summary stat card.
@@ -177,27 +138,36 @@ const buildConicGradient = (
 };
 
 // Shows profile stats summary cards.
-function StatsPanel({ data, loading, error, onRetry }: StatsPanelProps) {
+function StatsPanel({
+  data,
+  loading,
+  error,
+  onRetry,
+  onLogin,
+}: StatsPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        Loading stats...
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SkeletonBlock key={`stats-card-${index}`} className="h-24" />
+          ))}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <SkeletonBlock className="h-64" />
+          <SkeletonBlock className="h-64" />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-        <p>{error}</p>
-        <button
-          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
-          type="button"
-          onClick={onRetry}
-        >
-          Retry
-        </button>
-      </div>
+      <StateError
+        message={error.message}
+        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        onAction={error.action === 'login' ? onLogin : onRetry}
+      />
     );
   }
 
@@ -316,35 +286,41 @@ function StatsPanel({ data, loading, error, onRetry }: StatsPanelProps) {
 }
 
 // Shows profile activity list.
-function ActivityPanel({ data, loading, error, onRetry }: ActivityPanelProps) {
+function ActivityPanel({
+  data,
+  loading,
+  error,
+  onRetry,
+  onLogin,
+  onExplore,
+}: ActivityPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        Loading activity...
+      <div className="space-y-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <SkeletonBlock key={`activity-skeleton-${index}`} className="h-24" />
+        ))}
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-        <p>{error}</p>
-        <button
-          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
-          type="button"
-          onClick={onRetry}
-        >
-          Retry
-        </button>
-      </div>
+      <StateError
+        message={error.message}
+        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        onAction={error.action === 'login' ? onLogin : onRetry}
+      />
     );
   }
 
   if (!data || data.results.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        No ratings yet.
-      </div>
+      <StateEmpty
+        title="Todavía no hay actividad."
+        actionLabel="Explorar partidos"
+        onAction={onExplore}
+      />
     );
   }
 
@@ -357,27 +333,24 @@ function HighlightsPanel({
   loading,
   error,
   onRetry,
+  onLogin,
 }: HighlightsPanelProps) {
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        Loading highlights...
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SkeletonBlock className="h-52" />
+        <SkeletonBlock className="h-52" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-        <p>{error}</p>
-        <button
-          className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
-          type="button"
-          onClick={onRetry}
-        >
-          Retry
-        </button>
-      </div>
+      <StateError
+        message={error.message}
+        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        onAction={error.action === 'login' ? onLogin : onRetry}
+      />
     );
   }
 
@@ -421,6 +394,7 @@ function HighlightsPanel({
 
 // Profile page that lazy loads stats, activity, and highlights tabs.
 export default function Page() {
+  const router = useRouter();
   const params = useParams<ProfilePageParams>();
   const username = getUsernameFromParams(params);
   const [activeTab, setActiveTab] = useState<TabKey>('stats');
@@ -435,10 +409,10 @@ export default function Page() {
     activity: false,
     highlights: false,
   });
-  const [errors, setErrors] = useState<Record<TabKey, string>>({
-    stats: '',
-    activity: '',
-    highlights: '',
+  const [errors, setErrors] = useState<Record<TabKey, ErrorState | null>>({
+    stats: null,
+    activity: null,
+    highlights: null,
   });
 
   // Updates the loading flag for a specific tab.
@@ -447,22 +421,32 @@ export default function Page() {
   };
 
   // Updates the error message for a specific tab.
-  const setTabError = (tab: TabKey, message: string) => {
-    setErrors((prev) => ({ ...prev, [tab]: message }));
+  const setTabError = (tab: TabKey, value: ErrorState | null) => {
+    setErrors((prev) => ({ ...prev, [tab]: value }));
+  };
+
+  const resolveError = (err: unknown): ErrorState => {
+    if (err instanceof ApiError && err.status === 401) {
+      return {
+        message: 'Tu sesión expiró. Iniciá sesión de nuevo.',
+        action: 'login',
+      };
+    }
+    return {
+      message: 'No pudimos cargar los datos.',
+      action: 'retry',
+    };
   };
 
   // Loads the stats tab content.
   const loadStats = async (targetUsername: string, rangeKey: RangeKey) => {
     setTabLoading('stats', true);
-    setTabError('stats', '');
+    setTabError('stats', null);
     try {
       const response = await fetchProfileStats(targetUsername, rangeKey);
       setStatsData(response);
     } catch (err) {
-      setTabError(
-        'stats',
-        err instanceof Error ? err.message : 'Failed to load stats.',
-      );
+      setTabError('stats', resolveError(err));
     } finally {
       setTabLoading('stats', false);
     }
@@ -471,15 +455,12 @@ export default function Page() {
   // Loads the activity tab content.
   const loadActivity = async (targetUsername: string, rangeKey: RangeKey) => {
     setTabLoading('activity', true);
-    setTabError('activity', '');
+    setTabError('activity', null);
     try {
       const response = await fetchProfileActivity(targetUsername, rangeKey);
       setActivityData(response);
     } catch (err) {
-      setTabError(
-        'activity',
-        err instanceof Error ? err.message : 'Failed to load activity.',
-      );
+      setTabError('activity', resolveError(err));
     } finally {
       setTabLoading('activity', false);
     }
@@ -488,15 +469,12 @@ export default function Page() {
   // Loads the highlights tab content.
   const loadHighlights = async (targetUsername: string, rangeKey: RangeKey) => {
     setTabLoading('highlights', true);
-    setTabError('highlights', '');
+    setTabError('highlights', null);
     try {
       const response = await fetchProfileHighlights(targetUsername, rangeKey);
       setHighlightsData(response);
     } catch (err) {
-      setTabError(
-        'highlights',
-        err instanceof Error ? err.message : 'Failed to load highlights.',
-      );
+      setTabError('highlights', resolveError(err));
     } finally {
       setTabLoading('highlights', false);
     }
@@ -513,7 +491,7 @@ export default function Page() {
     setStatsData(null);
     setActivityData(null);
     setHighlightsData(null);
-    setErrors({ stats: '', activity: '', highlights: '' });
+    setErrors({ stats: null, activity: null, highlights: null });
   };
 
   // Loads tab data when the active tab or range changes.
@@ -598,6 +576,14 @@ export default function Page() {
     loadHighlights(username, range);
   };
 
+  const handleLogin = () => {
+    router.push('/login');
+  };
+
+  const handleExplore = () => {
+    router.push('/matches');
+  };
+
   useEffect(handleUsernameChange, [username]);
   useEffect(handleTabFetch, [
     activeTab,
@@ -665,6 +651,7 @@ export default function Page() {
           loading={loading.stats}
           error={errors.stats}
           onRetry={handleStatsRetry}
+          onLogin={handleLogin}
         />
       )}
 
@@ -674,6 +661,8 @@ export default function Page() {
           loading={loading.activity}
           error={errors.activity}
           onRetry={handleActivityRetry}
+          onLogin={handleLogin}
+          onExplore={handleExplore}
         />
       )}
 
@@ -683,6 +672,7 @@ export default function Page() {
           loading={loading.highlights}
           error={errors.highlights}
           onRetry={handleHighlightsRetry}
+          onLogin={handleLogin}
         />
       )}
     </section>

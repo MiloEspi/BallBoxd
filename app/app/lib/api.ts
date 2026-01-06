@@ -6,7 +6,11 @@ import type {
   ProfileHighlightsResponse,
   ProfileResponse,
   ProfileStatsResponse,
+  SearchResponse,
+  Team,
+  TeamMatchesResponse,
   TeamsResponse,
+  UserMini,
 } from './types';
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
@@ -32,6 +36,22 @@ type MatchesQuery = {
   to?: string;
   tournament?: string | number;
   search?: string;
+};
+
+type SearchQuery = {
+  q: string;
+  types?: string[];
+  league_id?: number | string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  page_size?: number;
+};
+
+type TeamMatchesQuery = {
+  scope?: 'recent' | 'upcoming' | 'all';
+  page?: number;
+  page_size?: number;
 };
 
 type ApiErrorBody = {
@@ -136,7 +156,16 @@ async function request<T>(
     return null as T;
   }
 
-  return (await res.json()) as T;
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return null as T;
+  }
+
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null as T;
+  }
 }
 
 // Helper for authenticated requests (token header).
@@ -163,6 +192,13 @@ export function register(username: string, email: string, password: string) {
 // Feed endpoint for matches from followed teams.
 export function fetchFeed() {
   return authRequest<FeedResponse>('/feed', {
+    method: 'GET',
+  });
+}
+
+// Returns the authenticated user.
+export function fetchMe() {
+  return authRequest<UserMini>('/me', {
     method: 'GET',
   });
 }
@@ -239,6 +275,60 @@ export function fetchProfileHighlights(username: string, range: string) {
 // Teams catalog endpoint with follow status when authenticated.
 export function fetchTeams() {
   return authRequest<TeamsResponse>('/teams', {
+    method: 'GET',
+  });
+}
+
+// Global search endpoint for teams, leagues, and matches.
+export function fetchSearch(query: SearchQuery) {
+  const params = new URLSearchParams();
+  params.set('q', query.q);
+  if (query.types?.length) {
+    params.set('types', query.types.join(','));
+  }
+  if (query.league_id !== undefined) {
+    params.set('league_id', String(query.league_id));
+  }
+  if (query.date_from) {
+    params.set('date_from', query.date_from);
+  }
+  if (query.date_to) {
+    params.set('date_to', query.date_to);
+  }
+  if (query.page) {
+    params.set('page', String(query.page));
+  }
+  if (query.page_size) {
+    params.set('page_size', String(query.page_size));
+  }
+  return authRequest<SearchResponse>(`/search?${params.toString()}`, {
+    method: 'GET',
+  });
+}
+
+// Team detail endpoint.
+export function fetchTeamDetail(teamId: number) {
+  return authRequest<Team>(`/teams/${teamId}`, {
+    method: 'GET',
+  });
+}
+
+// Team matches endpoint.
+export function fetchTeamMatches(teamId: number, query: TeamMatchesQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.scope) {
+    params.set('scope', query.scope);
+  }
+  if (query.page) {
+    params.set('page', String(query.page));
+  }
+  if (query.page_size) {
+    params.set('page_size', String(query.page_size));
+  }
+  const path = params.toString()
+    ? `/teams/${teamId}/matches?${params.toString()}`
+    : `/teams/${teamId}/matches`;
+  return authRequest<TeamMatchesResponse>(path, {
     method: 'GET',
   });
 }

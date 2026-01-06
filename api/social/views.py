@@ -1,19 +1,28 @@
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+import re
+import unicodedata
 from typing import Optional
 
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, Prefetch, Q
+from django.db.models import Avg, Case, Count, Exists, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.serializers import UserMiniSerializer
 from matches.models import Match, Rating, Team, Tournament
-from matches.serializers import FeedMatchSerializer
+from matches.serializers import (
+    FeedMatchSerializer,
+    LeagueSerializer,
+    SearchMatchSerializer,
+    TeamDetailSerializer,
+    TeamListSerializer,
+)
 from .models import Follow, UserFollow
 from .serializers import (
     ProfileActivityResponseSerializer,
@@ -23,6 +32,53 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _normalize_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.lower())
+    stripped = "".join(char for char in normalized if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9\s]+", " ", stripped).strip()
+
+
+def _tokenize_query(value: str):
+    normalized = _normalize_text(value)
+    return [token for token in normalized.split() if token]
+
+
+def _split_vs_query(value: str):
+    normalized = _normalize_text(value)
+    parts = re.split(r"\s+(?:vs|v|-)\s+", normalized)
+    if len(parts) == 2:
+        left = [token for token in parts[0].split() if token]
+        right = [token for token in parts[1].split() if token]
+        if left and right:
+            return left, right
+    return None
+
+
+def _minutes_weight_case():
+    return Case(
+        When(ratings__minutes_watched=Rating.MinutesWatched.LT_30, then=Value(0.25)),
+        When(
+            ratings__minutes_watched=Rating.MinutesWatched.ONE_HALF, then=Value(0.5)
+        ),
+        When(
+            ratings__minutes_watched=Rating.MinutesWatched.ALMOST_ALL,
+            then=Value(0.75),
+        ),
+        When(ratings__minutes_watched=Rating.MinutesWatched.FULL, then=Value(1.0)),
+        default=Value(1.0),
+        output_field=FloatField(),
+    )
+
+
+def _rank_by_query(field: str, query: str):
+    return Case(
+        When(**{f"{field}__iexact": query}, then=Value(0)),
+        When(**{f"{field}__istartswith": query}, then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
 
 
 class FeedView(APIView):
@@ -39,6 +95,10 @@ class FeedView(APIView):
             "tournament",
             "home_team",
             "away_team",
+        ).annotate(
+            weighted_score_sum=Sum(F("ratings__score") * _minutes_weight_case()),
+            weight_sum=Sum(_minutes_weight_case()),
+            rating_count=Count("ratings"),
         ).order_by("-date_time")
 
         my_ratings = Rating.objects.filter(user=user)
@@ -54,6 +114,22 @@ class FeedView(APIView):
                 "results": data,
             }
         )
+
+
+class TeamsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Returns the list of teams, marking the ones followed by the user.
+    def get(self, request):
+        teams_qs = Team.objects.annotate(
+            is_following=Exists(
+                Follow.objects.filter(user=request.user, team=OuterRef("pk"))
+            )
+        ).order_by("name")
+
+        serializer = TeamListSerializer(teams_qs, many=True)
+        data = serializer.data
+        return Response({"count": len(data), "results": data})
 
 
 class ProfileView(APIView):
@@ -287,6 +363,238 @@ class ProfileHighlightsView(APIView):
         }
         serializer = ProfileHighlightsResponseSerializer(payload)
         return Response(serializer.data)
+
+
+class SearchView(APIView):
+    permission_classes = [AllowAny]
+
+    # Returns grouped search results for teams, leagues, and matches.
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"detail": "q is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_types = request.query_params.get("types")
+        types = (
+            {item.strip() for item in raw_types.split(",") if item.strip()}
+            if raw_types
+            else {"teams", "leagues", "matches"}
+        )
+
+        league_id = request.query_params.get("league_id")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+        except ValueError:
+            page = 1
+        try:
+            page_size = max(int(request.query_params.get("page_size", 20)), 1)
+        except ValueError:
+            page_size = 20
+        page_size = min(page_size, 50)
+
+        tokens = _tokenize_query(q)
+        vs_tokens = _split_vs_query(q)
+
+        if not tokens and not vs_tokens:
+            return Response(
+                {
+                    "q": q,
+                    "page": page,
+                    "page_size": page_size,
+                    "total": 0,
+                    "results": {"teams": [], "leagues": [], "matches": []},
+                }
+            )
+
+        results = {"teams": [], "leagues": [], "matches": []}
+        total = 0
+
+        if "teams" in types:
+            teams_qs = Team.objects.all()
+            for token in tokens:
+                teams_qs = teams_qs.filter(name__icontains=token)
+            if league_id and str(league_id).isdigit():
+                teams_qs = teams_qs.filter(
+                    Q(home_matches__tournament_id=int(league_id))
+                    | Q(away_matches__tournament_id=int(league_id))
+                ).distinct()
+            teams_qs = teams_qs.annotate(rank=_rank_by_query("name", q)).order_by(
+                "rank", "name"
+            )
+            total += teams_qs.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            results["teams"] = TeamDetailSerializer(teams_qs[start:end], many=True).data
+
+        if "leagues" in types:
+            leagues_qs = Tournament.objects.all()
+            for token in tokens:
+                leagues_qs = leagues_qs.filter(
+                    Q(name__icontains=token) | Q(country__icontains=token)
+                )
+            leagues_qs = leagues_qs.annotate(rank=_rank_by_query("name", q)).order_by(
+                "rank", "name"
+            )
+            total += leagues_qs.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            results["leagues"] = LeagueSerializer(leagues_qs[start:end], many=True).data
+
+        if "matches" in types:
+            matches_qs = Match.objects.select_related(
+                "tournament",
+                "home_team",
+                "away_team",
+            )
+            if league_id and str(league_id).isdigit():
+                matches_qs = matches_qs.filter(tournament_id=int(league_id))
+
+            parsed_from = (
+                parse_datetime(date_from) or parse_date(date_from)
+                if date_from
+                else None
+            )
+            parsed_to = (
+                parse_datetime(date_to) or parse_date(date_to) if date_to else None
+            )
+            if parsed_from:
+                if isinstance(parsed_from, date) and not isinstance(
+                    parsed_from, datetime
+                ):
+                    matches_qs = matches_qs.filter(date_time__date__gte=parsed_from)
+                else:
+                    matches_qs = matches_qs.filter(date_time__gte=parsed_from)
+            if parsed_to:
+                if isinstance(parsed_to, date) and not isinstance(parsed_to, datetime):
+                    matches_qs = matches_qs.filter(date_time__date__lte=parsed_to)
+                else:
+                    matches_qs = matches_qs.filter(date_time__lte=parsed_to)
+
+            if vs_tokens:
+                left_tokens, right_tokens = vs_tokens
+
+                def team_filter(prefix, items):
+                    query = Q()
+                    for token in items:
+                        query &= Q(**{f"{prefix}__name__icontains": token})
+                    return query
+
+                matches_qs = matches_qs.filter(
+                    (
+                        team_filter("home_team", left_tokens)
+                        & team_filter("away_team", right_tokens)
+                    )
+                    | (
+                        team_filter("home_team", right_tokens)
+                        & team_filter("away_team", left_tokens)
+                    )
+                )
+            else:
+                for token in tokens:
+                    matches_qs = matches_qs.filter(
+                        Q(home_team__name__icontains=token)
+                        | Q(away_team__name__icontains=token)
+                    )
+
+            matches_qs = matches_qs.annotate(
+                weighted_score_sum=Sum(F("ratings__score") * _minutes_weight_case()),
+                weight_sum=Sum(_minutes_weight_case()),
+                rating_count=Count("ratings"),
+            ).order_by("-date_time")
+
+            if request.user.is_authenticated:
+                my_ratings = Rating.objects.filter(user=request.user)
+                matches_qs = matches_qs.prefetch_related(
+                    Prefetch("ratings", queryset=my_ratings, to_attr="my_rating_list")
+                )
+
+            total += matches_qs.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            results["matches"] = SearchMatchSerializer(
+                matches_qs[start:end], many=True
+            ).data
+
+        return Response(
+            {
+                "q": q,
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "results": results,
+            }
+        )
+
+
+class TeamDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    # Returns team details.
+    def get(self, request, pk):
+        team = get_object_or_404(Team, pk=pk)
+        return Response(TeamDetailSerializer(team, context={"request": request}).data)
+
+
+class TeamMatchesView(APIView):
+    permission_classes = [AllowAny]
+
+    # Returns team matches with optional scope filtering.
+    def get(self, request, pk):
+        team = get_object_or_404(Team, pk=pk)
+        scope = request.query_params.get("scope", "all")
+
+        matches_qs = Match.objects.filter(
+            Q(home_team=team) | Q(away_team=team)
+        ).select_related(
+            "tournament",
+            "home_team",
+            "away_team",
+        )
+
+        now = timezone.now()
+        if scope == "recent":
+            matches_qs = matches_qs.filter(date_time__lt=now)
+        elif scope == "upcoming":
+            matches_qs = matches_qs.filter(date_time__gte=now)
+
+        matches_qs = matches_qs.annotate(
+            weighted_score_sum=Sum(F("ratings__score") * _minutes_weight_case()),
+            weight_sum=Sum(_minutes_weight_case()),
+            rating_count=Count("ratings"),
+        ).order_by("-date_time")
+
+        if request.user.is_authenticated:
+            my_ratings = Rating.objects.filter(user=request.user)
+            matches_qs = matches_qs.prefetch_related(
+                Prefetch("ratings", queryset=my_ratings, to_attr="my_rating_list")
+            )
+
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+        except ValueError:
+            page = 1
+        try:
+            page_size = max(int(request.query_params.get("page_size", 20)), 1)
+        except ValueError:
+            page_size = 20
+        page_size = min(page_size, 50)
+
+        total = matches_qs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        serializer = SearchMatchSerializer(matches_qs[start:end], many=True)
+        return Response(
+            {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "results": serializer.data,
+            }
+        )
 
 
 class TeamFollowView(APIView):

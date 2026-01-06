@@ -11,12 +11,17 @@ type DemoTeam = {
   id: number;
   name: string;
   country: string;
+  city?: string | null;
+  stadium?: string | null;
+  logo_url?: string | null;
 };
 
 type DemoTournament = {
   id: number;
   name: string;
   country: string;
+  season?: string | null;
+  logo_url?: string | null;
 };
 
 type DemoMatch = {
@@ -365,6 +370,8 @@ export const toTournament = (store: DemoStore, tournamentId: number) => {
     id: tournament.id,
     name: tournament.name,
     country: tournament.country,
+    season: tournament.season ?? null,
+    logo_url: tournament.logo_url ?? null,
   };
 };
 
@@ -374,18 +381,34 @@ export const toTeam = (store: DemoStore, teamId: number) => {
   if (!team) {
     return null;
   }
-  return { id: team.id, name: team.name, country: team.country };
+  return {
+    id: team.id,
+    name: team.name,
+    country: team.country,
+    city: team.city ?? null,
+    stadium: team.stadium ?? null,
+    logo_url: team.logo_url ?? null,
+  };
 };
 
 // Computes average rating and count for a match.
 const getMatchAverages = (store: DemoStore, matchId: number) => {
   const ratings = store.ratings.filter((rating) => rating.matchId === matchId);
   const ratingCount = ratings.length;
-  const avgScore = ratingCount
-    ? roundToTwo(
-        ratings.reduce((sum, rating) => sum + rating.score, 0) / ratingCount,
-      )
-    : 0;
+  const weights: Record<string, number> = {
+    LT_30: 0.25,
+    ONE_HALF: 0.5,
+    ALMOST_ALL: 0.75,
+    FULL: 1,
+  };
+  let weightedSum = 0;
+  let weightTotal = 0;
+  ratings.forEach((rating) => {
+    const weight = weights[rating.minutes_watched] ?? 1;
+    weightedSum += rating.score * weight;
+    weightTotal += weight;
+  });
+  const avgScore = weightTotal ? roundToTwo(weightedSum / weightTotal) : 0;
   return { avgScore, ratingCount };
 };
 
@@ -422,6 +445,37 @@ export const toMatch = (
   };
 };
 
+// Builds a match payload for search results.
+export const toSearchMatch = (
+  store: DemoStore,
+  match: DemoMatch,
+  userId?: number,
+) => {
+  const stats = getMatchAverages(store, match.id);
+  const myRating = userId
+    ? store.ratings.find(
+        (rating) => rating.userId === userId && rating.matchId === match.id,
+      )
+    : null;
+  const kickoff = new Date(match.date_time);
+  const status = kickoff.getTime() >= Date.now() ? 'upcoming' : 'finished';
+
+  return {
+    id: match.id,
+    kickoff_at: match.date_time,
+    league: toTournament(store, match.tournamentId),
+    home: toTeam(store, match.homeTeamId),
+    away: toTeam(store, match.awayTeamId),
+    status,
+    score: {
+      home: match.home_score,
+      away: match.away_score,
+    },
+    avg_rating: stats.avgScore,
+    my_rating: myRating ? myRating.score : null,
+  };
+};
+
 // Builds a rating payload with nested user data.
 export const toRating = (store: DemoStore, rating: DemoRating) => {
   const user = store.users.find((item) => item.id === rating.userId);
@@ -453,9 +507,20 @@ export const getMatchById = (store: DemoStore, matchId: number) => {
 export const getMatchStats = (store: DemoStore, matchId: number) => {
   const ratings = store.ratings.filter((rating) => rating.matchId === matchId);
   const ratingCount = ratings.length;
-  const avgScore = ratingCount
-    ? roundToTwo(ratings.reduce((sum, rating) => sum + rating.score, 0) / ratingCount)
-    : 0;
+  const weights: Record<string, number> = {
+    LT_30: 0.25,
+    ONE_HALF: 0.5,
+    ALMOST_ALL: 0.75,
+    FULL: 1,
+  };
+  let weightedSum = 0;
+  let weightTotal = 0;
+  ratings.forEach((rating) => {
+    const weight = weights[rating.minutes_watched] ?? 1;
+    weightedSum += rating.score * weight;
+    weightTotal += weight;
+  });
+  const avgScore = weightTotal ? roundToTwo(weightedSum / weightTotal) : 0;
   const fullCount = ratings.filter(
     (rating) => rating.minutes_watched === 'FULL',
   ).length;

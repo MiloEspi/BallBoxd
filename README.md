@@ -29,6 +29,28 @@ python manage.py seed
 python manage.py runserver
 ```
 
+### External data (football-data.org)
+Set the token in your shell:
+```powershell
+$env:FOOTBALL_DATA_TOKEN="your_token_here"
+```
+Optional tuning:
+```
+IMPORT_MATCHES_RANGE_DAYS=0
+IMPORT_MATCHES_FREQUENCY_MINUTES=60
+IMPORT_MATCHES_WEEKDAY_MINUTES=180
+IMPORT_MATCHES_WEEKEND_MINUTES=60
+LOG_LEVEL=INFO
+```
+Import competitions:
+```powershell
+python manage.py import_leagues
+```
+Sync matches for a range (global):
+```powershell
+python manage.py import_fixtures --from 2024-01-01 --to 2024-01-02
+```
+
 ### Endpoints principales
 - POST `/api/v1/auth/register/`
 - POST `/api/v1/auth/token/`

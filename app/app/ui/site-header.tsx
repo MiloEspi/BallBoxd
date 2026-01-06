@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import GlobalSearch from '@/app/components/search/GlobalSearch';
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
 export default function SiteHeader() {
   const [hasToken, setHasToken] = useState(false);
   const pathname = usePathname();
@@ -15,11 +19,14 @@ export default function SiteHeader() {
 
   return (
     <header className="border-b border-slate-800/80">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-4 px-6 py-5">
         <Link href="/" className="text-sm uppercase tracking-[0.3em] text-slate-400">
           BallBoxd
         </Link>
-        <nav className="flex items-center gap-3 text-sm">
+        <div className="w-full flex-1 md:w-auto">
+          <GlobalSearch />
+        </div>
+        <nav className="ml-auto flex items-center gap-3 text-sm">
           {hasToken ? (
             <>
               <Link
@@ -43,12 +50,14 @@ export default function SiteHeader() {
               >
                 Iniciar sesion
               </Link>
-              <Link
-                href="/login?mode=register"
-                className="rounded-full bg-white px-4 py-2 font-semibold text-slate-900 transition hover:bg-slate-200"
-              >
-                Registrarse
-              </Link>
+              {!DEMO_MODE && (
+                <Link
+                  href="/login?mode=register"
+                  className="rounded-full bg-white px-4 py-2 font-semibold text-slate-900 transition hover:bg-slate-200"
+                >
+                  Registrarse
+                </Link>
+              )}
             </>
           )}
         </nav>

@@ -2,22 +2,54 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { fetchMe } from '@/app/lib/api';
 
 type NavItem = {
   href: string;
   label: string;
 };
 
-const navItems: NavItem[] = [
-  { href: '/feed', label: 'Feed' },
-  { href: '/matches', label: 'Partidos' },
-  { href: '/teams', label: 'Equipos' },
-  { href: '/profile/camilo', label: 'Perfil' },
-];
-
 // Renders the app navigation for mobile and desktop.
 export default function AppSidebar() {
   const pathname = usePathname();
+  const [profileHref, setProfileHref] = useState('/profile/camilo');
+
+  useEffect(() => {
+    const cachedUsername = localStorage.getItem('auth_username');
+    if (cachedUsername) {
+      setProfileHref(`/profile/${cachedUsername}`);
+    }
+
+    let isMounted = true;
+    const loadProfile = async () => {
+      try {
+        const me = await fetchMe();
+        if (!isMounted) {
+          return;
+        }
+        if (me?.username) {
+          setProfileHref(`/profile/${me.username}`);
+          localStorage.setItem('auth_username', me.username);
+        }
+      } catch {
+        // Keep the cached/default profile route when auth is missing.
+      }
+    };
+
+    loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
+
+  const navItems: NavItem[] = [
+    { href: '/feed', label: 'Feed' },
+    { href: '/matches', label: 'Partidos' },
+    { href: '/teams', label: 'Equipos' },
+    { href: profileHref, label: 'Perfil' },
+  ];
 
   return (
     <>

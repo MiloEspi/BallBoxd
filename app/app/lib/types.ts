@@ -9,12 +9,25 @@ export type Team = {
   name: string;
   country: string;
   is_following?: boolean;
+  city?: string | null;
+  stadium?: string | null;
+  logo_url?: string | null;
+};
+
+export type TeamSummary = {
+  id: number;
+  name: string;
+  country?: string;
+  logo_url?: string | null;
 };
 
 export type Tournament = {
   id: number;
   name: string;
   country: string;
+  season?: string | null;
+  code?: string | null;
+  logo_url?: string | null;
 };
 
 export type Rating = {
@@ -36,11 +49,57 @@ export type Match = {
   home_team: Team;
   away_team: Team;
   date_time: string;
+  status?: string | null;
+  venue?: string | null;
   home_score: number;
   away_score: number;
   avg_score?: number;
   rating_count?: number;
   my_rating?: Rating | null;
+};
+
+export type League = {
+  id: number;
+  name: string;
+  country: string;
+  season?: string | null;
+  logo_url?: string | null;
+};
+
+export type MatchResult = {
+  id: number;
+  kickoff_at: string;
+  league: League;
+  home: TeamSummary;
+  away: TeamSummary;
+  status: string;
+  score: {
+    home: number | null;
+    away: number | null;
+  };
+  avg_rating: number;
+  my_rating: number | null;
+};
+
+export type SearchResults = {
+  teams: Team[];
+  leagues: League[];
+  matches: MatchResult[];
+};
+
+export type SearchResponse = {
+  q: string;
+  page: number;
+  page_size: number;
+  total: number;
+  results: SearchResults;
+};
+
+export type TeamMatchesResponse = {
+  page: number;
+  page_size: number;
+  total: number;
+  results: MatchResult[];
 };
 
 export type FeedResponse = {

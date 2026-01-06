@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { login, register } from '@/app/lib/api';
 
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
 type AuthMode = 'login' | 'register';
 
 // Client login/register form that reads the mode from query params.
@@ -22,6 +24,10 @@ export default function LoginClient() {
 
   // Syncs form mode from the URL query string.
   useEffect(() => {
+    if (DEMO_MODE) {
+      setMode('login');
+      return;
+    }
     const modeParam = searchParams.get('mode');
     if (modeParam === 'register') {
       setMode('register');
@@ -38,12 +44,14 @@ export default function LoginClient() {
     setLoading(true);
 
     try {
-      if (isRegister) {
+      if (isRegister && !DEMO_MODE) {
         const response = await register(username, email, password);
         localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('auth_username', response.user.username);
       } else {
         const response = await login(username, password);
         localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('auth_username', username);
       }
       router.push('/feed');
     } catch (err) {
@@ -55,6 +63,9 @@ export default function LoginClient() {
 
   // Toggles between login and register modes.
   const toggleMode = () => {
+    if (DEMO_MODE) {
+      return;
+    }
     setMode((current) => (current === 'login' ? 'register' : 'login'));
   };
 
@@ -141,15 +152,30 @@ export default function LoginClient() {
         </button>
       </form>
 
-      <button
-        className="w-full text-center text-xs text-slate-400 transition hover:text-slate-200"
-        type="button"
-        onClick={toggleMode}
-      >
-        {isRegister
-          ? 'Ya tienes cuenta? Inicia sesion'
-          : 'No tienes cuenta? Registrate'}
-      </button>
+      {DEMO_MODE && (
+        <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-xs text-amber-100">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+            Demo accounts
+          </p>
+          <div className="mt-3 space-y-2 font-semibold text-amber-50">
+            <div>camilo / 1234</div>
+            <div>alice / 1234</div>
+            <div>bob / 1234</div>
+          </div>
+        </div>
+      )}
+
+      {!DEMO_MODE && (
+        <button
+          className="w-full text-center text-xs text-slate-400 transition hover:text-slate-200"
+          type="button"
+          onClick={toggleMode}
+        >
+          {isRegister
+            ? 'Ya tienes cuenta? Inicia sesion'
+            : 'No tienes cuenta? Registrate'}
+        </button>
+      )}
     </section>
   );
 }

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -135,3 +136,20 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+FOOTBALL_DATA_TOKEN = os.getenv("FOOTBALL_DATA_TOKEN", "")
+FOOTBALL_DATA_BASE_URL = os.getenv(
+    "FOOTBALL_DATA_BASE_URL",
+    "https://api.football-data.org/v4",
+)
+IMPORT_MATCHES_RANGE_DAYS = int(os.getenv("IMPORT_MATCHES_RANGE_DAYS", "0"))
+IMPORT_MATCHES_FREQUENCY_MINUTES = int(
+    os.getenv("IMPORT_MATCHES_FREQUENCY_MINUTES", "60")
+)
+IMPORT_MATCHES_WEEKDAY_MINUTES = int(
+    os.getenv("IMPORT_MATCHES_WEEKDAY_MINUTES", "180")
+)
+IMPORT_MATCHES_WEEKEND_MINUTES = int(
+    os.getenv("IMPORT_MATCHES_WEEKEND_MINUTES", "60")
+)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

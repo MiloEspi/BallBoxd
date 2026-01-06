@@ -9,6 +9,7 @@ export default function LogoutPage() {
 
   useEffect(() => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_username');
     router.replace('/');
   }, [router]);
 

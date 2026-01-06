@@ -2,8 +2,17 @@ import { NextResponse } from 'next/server';
 
 import { createToken, getDemoStore, toUserMini } from '../../_demo';
 
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
 // Registers a demo user and returns an auth token.
 export async function POST(request: Request) {
+  if (DEMO_MODE) {
+    return NextResponse.json(
+      { detail: 'Register disabled in demo. Use seed accounts.' },
+      { status: 403 },
+    );
+  }
+
   const store = getDemoStore();
   const body = (await request.json().catch(() => ({}))) as {
     username?: string;

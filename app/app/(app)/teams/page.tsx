@@ -1,24 +1,82 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-import { fetchTeams, followTeam, unfollowTeam } from '@/app/lib/api';
-import type { Team } from '@/app/lib/types';
+import LeagueSelect from '@/app/components/ui/LeagueSelect';
+import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
+import { fetchMatches, fetchTeams, followTeam, unfollowTeam } from '@/app/lib/api';
+import type { Match, Team } from '@/app/lib/types';
 
-// Teams catalog page with search and follow controls.
+const getDateRange = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 180);
+  return {
+    from: start.toISOString().slice(0, 10),
+    to: end.toISOString().slice(0, 10),
+  };
+};
+
+const buildLeagueOptions = (matches: Match[]) => {
+  const map = new Map<number, { id: number; name: string; country?: string }>();
+  matches.forEach((match) => {
+    if (!map.has(match.tournament.id)) {
+      map.set(match.tournament.id, {
+        id: match.tournament.id,
+        name: match.tournament.name,
+        country: match.tournament.country,
+      });
+    }
+  });
+  return Array.from(map.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+};
+
+const buildTeamLeagueMap = (matches: Match[]) => {
+  const map = new Map<number, Set<number>>();
+  matches.forEach((match) => {
+    const leagueId = match.tournament.id;
+    [match.home_team.id, match.away_team.id].forEach((teamId) => {
+      if (!map.has(teamId)) {
+        map.set(teamId, new Set());
+      }
+      map.get(teamId)!.add(leagueId);
+    });
+  });
+  return map;
+};
+
+// Teams catalog page with league navigation and follow controls.
 export default function Page() {
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [selectedLeague, setSelectedLeague] = useState('ALL');
+  const [showFollowingOnly, setShowFollowingOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'az' | 'follow'>('az');
+  const [transitionPhase, setTransitionPhase] = useState<
+    'idle' | 'fadeOut' | 'skeleton' | 'fadeIn'
+  >('idle');
 
   const loadTeams = async () => {
     setLoading(true);
     setError('');
+    const range = getDateRange();
     try {
-      const data = await fetchTeams();
-      setTeams(data.results);
+      const teamsResponse = await fetchTeams();
+      setTeams(teamsResponse.results);
+      try {
+        const matchesResponse = await fetchMatches(range);
+        setMatches(matchesResponse.results);
+      } catch {
+        setMatches([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load teams.');
     } finally {
@@ -30,35 +88,102 @@ export default function Page() {
     loadTeams();
   }, []);
 
+  useEffect(() => {
+    if (selectedLeague === 'ALL') {
+      setTransitionPhase('idle');
+      return;
+    }
+    setTransitionPhase('fadeOut');
+    const fadeTimeout = window.setTimeout(() => {
+      setTransitionPhase('skeleton');
+    }, 120);
+    const skeletonTimeout = window.setTimeout(() => {
+      setTransitionPhase('fadeIn');
+    }, 320);
+    const doneTimeout = window.setTimeout(() => {
+      setTransitionPhase('idle');
+    }, 470);
+    return () => {
+      window.clearTimeout(fadeTimeout);
+      window.clearTimeout(skeletonTimeout);
+      window.clearTimeout(doneTimeout);
+    };
+  }, [selectedLeague]);
+
+  const leagueOptions = useMemo(() => buildLeagueOptions(matches), [matches]);
+  const teamLeagueMap = useMemo(() => buildTeamLeagueMap(matches), [matches]);
+  const hasOtherTeams = teams.some((team) => !teamLeagueMap.has(team.id));
+
+  const leagueDropdownOptions = useMemo(() => {
+    const options = [
+      { value: 'ALL', label: 'All leagues' },
+      ...leagueOptions.map((league) => ({
+        value: String(league.id),
+        label: league.name,
+        subtitle: league.country ?? undefined,
+      })),
+    ];
+    if (hasOtherTeams) {
+      options.push({ value: 'OTHER', label: 'Other teams' });
+    }
+    return options;
+  }, [hasOtherTeams, leagueOptions]);
+
   const filteredTeams = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) {
-      return teams;
+    let list = teams.filter((team) => {
+      if (showFollowingOnly && !team.is_following) {
+        return false;
+      }
+      if (selectedLeague === 'ALL') {
+        return true;
+      }
+      if (selectedLeague === 'OTHER') {
+        return !teamLeagueMap.has(team.id);
+      }
+      const leagues = teamLeagueMap.get(team.id);
+      return leagues ? leagues.has(Number(selectedLeague)) : false;
+    });
+    if (normalized) {
+      list = list.filter((team) =>
+        `${team.name} ${team.country}`.toLowerCase().includes(normalized),
+      );
     }
-    return teams.filter((team) =>
-      `${team.name} ${team.country}`.toLowerCase().includes(normalized),
-    );
-  }, [teams, query]);
+    list.sort((a, b) => {
+      if (sortBy === 'follow') {
+        const diff = Number(b.is_following) - Number(a.is_following);
+        if (diff !== 0) {
+          return diff;
+        }
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return list;
+  }, [query, selectedLeague, showFollowingOnly, sortBy, teamLeagueMap, teams]);
 
   const toggleFollow = async (team: Team) => {
     if (pendingId) {
       return;
     }
     setPendingId(team.id);
+    const next = !team.is_following;
+    setTeams((current) =>
+      current.map((item) =>
+        item.id === team.id ? { ...item, is_following: next } : item,
+      ),
+    );
     try {
-      if (team.is_following) {
-        await unfollowTeam(team.id);
-      } else {
+      if (next) {
         await followTeam(team.id);
+      } else {
+        await unfollowTeam(team.id);
       }
+    } catch (err) {
       setTeams((current) =>
         current.map((item) =>
-          item.id === team.id
-            ? { ...item, is_following: !item.is_following }
-            : item,
+          item.id === team.id ? { ...item, is_following: !next } : item,
         ),
       );
-    } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update follow.');
     } finally {
       setPendingId(null);
@@ -88,68 +213,176 @@ export default function Page() {
         >
           Limpiar
         </button>
+        <button
+          type="button"
+          className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+            showFollowingOnly
+              ? 'bg-white text-slate-900'
+              : 'border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+          }`}
+          onClick={() => setShowFollowingOnly((prev) => !prev)}
+        >
+          Following only
+        </button>
+        <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
+          <select
+            className="bg-transparent text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 focus:outline-none"
+            value={sortBy}
+            onChange={(event) =>
+              setSortBy(event.target.value === 'follow' ? 'follow' : 'az')
+            }
+          >
+            <option value="az">A-Z</option>
+            <option value="follow">Following first</option>
+          </select>
+        </div>
       </div>
 
-      {loading && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          Loading teams...
-        </div>
-      )}
+      <div className="lg:hidden">
+        <LeagueSelect
+          label="League"
+          value={selectedLeague}
+          options={leagueDropdownOptions}
+          onChange={setSelectedLeague}
+        />
+      </div>
 
-      {!loading && error && (
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-          <p>{error}</p>
-          <button
-            className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
-            type="button"
-            onClick={loadTeams}
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        <aside className="hidden rounded-2xl border border-white/10 bg-white/5 p-4 lg:block">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">
+            Leagues
+          </p>
+          <div className="mt-3 max-h-[70vh] space-y-2 overflow-y-auto pr-1">
+            {leagueDropdownOptions.map((league) => {
+              const isActive = selectedLeague === league.value;
+              return (
+                <button
+                  key={league.value}
+                  type="button"
+                  className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'border border-white/5 text-slate-300 hover:bg-white/5'
+                  }`}
+                  onClick={() => setSelectedLeague(league.value)}
+                >
+                  <div className="font-semibold">{league.label}</div>
+                  {league.subtitle && (
+                    <div className="text-xs text-slate-500">
+                      {league.subtitle}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
-      {!loading && !error && filteredTeams.length === 0 && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          No hay equipos para esta busqueda.
-        </div>
-      )}
+        <div className="space-y-4">
+          {loading && (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonBlock key={`team-skeleton-${index}`} className="h-28" />
+              ))}
+            </div>
+          )}
 
-      {!loading && !error && filteredTeams.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredTeams.map((team) => (
-            <article
-              key={team.id}
-              className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5"
-            >
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold text-white">
-                  {team.name}
-                </h2>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
-                  {team.country}
-                </p>
-              </div>
+          {!loading && error && (
+            <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+              <p>{error}</p>
               <button
+                className="mt-3 rounded-full border border-red-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-100"
                 type="button"
-                className={`mt-4 w-full rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                  team.is_following
-                    ? 'border border-emerald-400/60 text-emerald-200 hover:border-emerald-300'
-                    : 'bg-white text-slate-900 hover:bg-slate-200'
-                }`}
-                disabled={pendingId === team.id}
-                onClick={() => toggleFollow(team)}
+                onClick={loadTeams}
               >
-                {pendingId === team.id
-                  ? 'Guardando...'
-                  : team.is_following
-                  ? 'Siguiendo'
-                  : 'Seguir'}
+                Retry
               </button>
-            </article>
-          ))}
+            </div>
+          )}
+
+          {!loading && !error && filteredTeams.length === 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+              No hay equipos para esta busqueda.
+            </div>
+          )}
+
+          {!loading && !error && filteredTeams.length > 0 && (
+            <div
+              className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 transition-opacity duration-150 ${
+                transitionPhase === 'fadeOut' || transitionPhase === 'fadeIn'
+                  ? 'opacity-0'
+                  : 'opacity-100'
+              }`}
+            >
+              {transitionPhase === 'skeleton'
+                ? Array.from({ length: 6 }).map((_, index) => (
+                    <SkeletonBlock
+                      key={`team-skeleton-${index}`}
+                      className="h-28"
+                    />
+                  ))
+                : filteredTeams.map((team) => (
+                    <article
+                      key={team.id}
+                      className="cursor-pointer rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5 transition hover:border-slate-600"
+                      onClick={() => router.push(`/teams/${team.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          router.push(`/teams/${team.id}`);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
+                          {team.logo_url ? (
+                            <img
+                              src={team.logo_url}
+                              alt={team.name}
+                              className="h-full w-full object-contain p-2"
+                            />
+                          ) : (
+                            team.name.slice(0, 2)
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <h2 className="text-base font-semibold text-white">
+                            {team.name}
+                          </h2>
+                          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                            {team.country}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`mt-4 w-full rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                          team.is_following
+                            ? 'border border-emerald-400/60 text-emerald-200 hover:border-emerald-300'
+                            : 'bg-white text-slate-900 hover:bg-slate-200'
+                        }`}
+                        disabled={pendingId === team.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleFollow(team);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        {pendingId === team.id
+                          ? 'Guardando...'
+                          : team.is_following
+                          ? 'Siguiendo'
+                          : 'Seguir'}
+                      </button>
+                    </article>
+                  ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </section>
   );
 }
