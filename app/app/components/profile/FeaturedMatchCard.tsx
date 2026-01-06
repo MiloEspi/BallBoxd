@@ -9,7 +9,6 @@ type FeaturedMatchCardProps = {
   isDragOver?: boolean;
   onEdit?: (rating: RatingWithMatch) => void;
   onRemove?: (matchId: number) => void;
-  onSwapPrimary?: (matchId: number, nextPrimary: 'representative' | 'stadium') => void;
   onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
@@ -48,7 +47,6 @@ export default function FeaturedMatchCard({
   isDragOver,
   onEdit,
   onRemove,
-  onSwapPrimary,
   onDragStart,
   onDragOver,
   onDrop,
@@ -56,20 +54,8 @@ export default function FeaturedMatchCard({
 }: FeaturedMatchCardProps) {
   const match = rating.match;
   const representative = rating.representative_photo_url ?? '';
-  const stadium = rating.attended ? rating.stadium_photo_url ?? '' : '';
   const hasRepresentative = Boolean(representative);
-  const hasStadium = Boolean(stadium);
-  const canSwap = hasRepresentative && hasStadium;
-  const primaryChoice = rating.featured_primary_image ?? 'representative';
-  const primary =
-    primaryChoice === 'stadium' && canSwap ? stadium : representative;
-  const secondary = canSwap
-    ? primaryChoice === 'stadium'
-      ? representative
-      : stadium
-    : '';
-  const showBadge = canSwap;
-  const note = rating.featured_note?.trim() || rating.review?.trim() || '';
+  const showBadge = Boolean(rating.attended);
   const ringPercent = Math.min(100, Math.max(0, rating.score ?? 0));
 
   return (
@@ -90,139 +76,83 @@ export default function FeaturedMatchCard({
         <div className="absolute -bottom-20 -right-16 h-48 w-48 rounded-full bg-sky-400/10 blur-3xl" />
       </div>
 
-      <div className="relative grid">
-        <div className="flex flex-col gap-2 px-4 pb-3 pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">
-                {match.tournament.name}
-              </p>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {formatDate(match.date_time)}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="relative">
-                <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-2xl" />
-                <div
-                  className="relative flex h-11 w-11 items-center justify-center rounded-full p-[3px] shadow-[0_0_18px_rgba(255,255,255,0.22)]"
-                  style={{
-                    background: `conic-gradient(rgba(255,255,255,0.95) ${ringPercent}%, rgba(255,255,255,0.08) ${ringPercent}% 100%)`,
-                  }}
-                >
-                  <div className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-slate-950 text-sm font-semibold text-white">
-                    {rating.score}
-                  </div>
-                </div>
+      <div className="relative flex flex-col gap-2 px-3 pb-3 pt-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">
+              {match.tournament.name}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {formatDate(match.date_time)}
+            </p>
+          </div>
+          <div className="relative">
+            <div className="pointer-events-none absolute -inset-4 rounded-full bg-emerald-400/25 blur-2xl" />
+            <div
+              className="relative flex h-10 w-10 items-center justify-center rounded-full p-[3px] shadow-[0_0_18px_rgba(255,255,255,0.22)]"
+              style={{
+                background: `conic-gradient(rgba(255,255,255,0.95) ${ringPercent}%, rgba(255,255,255,0.08) ${ringPercent}% 100%)`,
+              }}
+            >
+              <div className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-slate-950 text-xs font-semibold text-white">
+                {rating.score}
               </div>
-              {isOwner && (
-                <div className="flex items-center gap-2">
-                  <button
-                    className="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
-                    type="button"
-                    onClick={() => onEdit?.(rating)}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    className="rounded-full border border-rose-400/40 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-rose-200 transition hover:border-rose-300"
-                    type="button"
-                    onClick={() => onRemove?.(match.id)}
-                  >
-                    Quitar
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 text-sm font-semibold text-white truncate">
-              {match.home_team.name} vs {match.away_team.name}
-            </div>
-            <div className="text-sm font-semibold text-slate-200">
-              {match.home_score}-{match.away_score}
             </div>
           </div>
         </div>
 
-        <div className="relative aspect-square">
-          {primary ? (
-            <img
-              src={primary}
-              alt={`${match.home_team.name} vs ${match.away_team.name}`}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-900/60 text-[10px] uppercase tracking-[0.3em] text-slate-500">
-              Imagen destacada
-              {isOwner && (
-                <button
-                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[9px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/40"
-                  type="button"
-                  onClick={() => onEdit?.(rating)}
-                >
-                  Agregar imagen
-                </button>
-              )}
-            </div>
-          )}
-
-          {note && (
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent px-3 pb-3 pt-6">
-              <p className="max-h-[32px] overflow-hidden text-[11px] leading-snug text-slate-100">
-                {note}
-              </p>
-            </div>
-          )}
-
-          {showBadge && (
-            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-              <StadiumIcon />
-              Estuve ahi
-            </div>
-          )}
-
-          {secondary && (
-            <div className="absolute bottom-3 right-3">
-              {isOwner && onSwapPrimary ? (
-                <button
-                  className="group relative h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-slate-900/70 shadow-[0_10px_25px_rgba(0,0,0,0.35)]"
-                  type="button"
-                  onClick={() =>
-                    onSwapPrimary(
-                      match.id,
-                      primaryChoice === 'stadium' ? 'representative' : 'stadium',
-                    )
-                  }
-                >
-                  <img
-                    src={secondary}
-                    alt="Imagen secundaria"
-                    className="h-full w-full object-cover"
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-[9px] uppercase tracking-[0.2em] text-white opacity-0 transition group-hover:opacity-100">
-                    Swap
-                  </span>
-                </button>
-              ) : (
-                <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-slate-900/70 shadow-[0_10px_25px_rgba(0,0,0,0.35)]">
-                  <img
-                    src={secondary}
-                    alt="Imagen secundaria"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {isOwner && (
-            <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-300">
-              Arrastra
-            </div>
-          )}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-white">
+            <span className="min-w-0 truncate">{match.home_team.name}</span>
+            <span className="text-slate-200">{match.home_score}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-white">
+            <span className="min-w-0 truncate">{match.away_team.name}</span>
+            <span className="text-slate-200">{match.away_score}</span>
+          </div>
         </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-slate-800/70 bg-slate-950/60">
+          <div className="relative aspect-square">
+            {hasRepresentative ? (
+              <img
+                src={representative}
+                alt={`${match.home_team.name} vs ${match.away_team.name}`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                Imagen destacada
+              </div>
+            )}
+
+            {showBadge && (
+              <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                <StadiumIcon />
+                Estuve ahi
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isOwner && (
+          <div className="flex items-center justify-between gap-2">
+            <button
+              className="rounded-full border border-slate-700 px-3 py-1 text-[9px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
+              type="button"
+              onClick={() => onEdit?.(rating)}
+            >
+              Editar
+            </button>
+            <button
+              className="text-[10px] uppercase tracking-[0.2em] text-rose-200 transition hover:text-rose-100"
+              type="button"
+              onClick={() => onRemove?.(match.id)}
+            >
+              Quitar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

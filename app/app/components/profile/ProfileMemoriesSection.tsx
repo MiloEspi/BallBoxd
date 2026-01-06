@@ -13,7 +13,6 @@ import {
   fetchProfileMemories,
   removeProfileMemory,
   reorderProfileMemories,
-  updateProfileMemory,
 } from '@/app/lib/api';
 import type { ProfileMemoriesResponse, RatingWithMatch } from '@/app/lib/types';
 
@@ -110,20 +109,6 @@ export default function ProfileMemoriesSection({
     }
   };
 
-  const handleSwapPrimary = async (
-    matchId: number,
-    nextPrimary: 'representative' | 'stadium',
-  ) => {
-    try {
-      const response = await updateProfileMemory(username, matchId, {
-        featured_primary_image: nextPrimary,
-      });
-      setData(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
-    }
-  };
-
   const handleDragStart =
     (matchId: number) => (event: React.DragEvent<HTMLDivElement>) => {
       if (!isOwner) {
@@ -189,7 +174,7 @@ export default function ProfileMemoriesSection({
 
   if (loading) {
     return (
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
             Mis partidos
@@ -198,9 +183,9 @@ export default function ProfileMemoriesSection({
             Partidos que me marcaron
           </p>
         </div>
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonBlock key={`memories-skeleton-${index}`} className="h-64" />
+            <SkeletonBlock key={`memories-skeleton-${index}`} className="h-48" />
           ))}
         </div>
       </section>
@@ -220,7 +205,7 @@ export default function ProfileMemoriesSection({
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
@@ -242,7 +227,7 @@ export default function ProfileMemoriesSection({
         )}
       </div>
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => {
           const rating = featuredMatches[index] ?? null;
           if (rating) {
@@ -258,7 +243,6 @@ export default function ProfileMemoriesSection({
                   setEditorOpen(true);
                 }}
                 onRemove={handleRemove}
-                onSwapPrimary={handleSwapPrimary}
                 onDragStart={handleDragStart(rating.match.id)}
                 onDragOver={handleDragOver(rating.match.id)}
                 onDrop={handleDrop(rating.match.id)}
@@ -271,7 +255,7 @@ export default function ProfileMemoriesSection({
               key={`memories-slot-${index}`}
               className="flex flex-col overflow-hidden rounded-3xl border border-dashed border-slate-800 bg-slate-950/40"
             >
-              <div className="h-16 border-b border-dashed border-slate-800/80" />
+              <div className="h-14 border-b border-dashed border-slate-800/80" />
               <div className="flex aspect-square items-center justify-center text-center text-[10px] uppercase tracking-[0.3em] text-slate-500">
                 {isOwner ? (
                   <button

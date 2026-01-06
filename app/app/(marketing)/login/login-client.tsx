@@ -66,7 +66,11 @@ export default function LoginClient() {
     if (DEMO_MODE) {
       return;
     }
-    setMode((current) => (current === 'login' ? 'register' : 'login'));
+    const nextMode = isRegister ? 'login' : 'register';
+    setMode(nextMode);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('mode', nextMode);
+    router.replace(`/login?${nextParams.toString()}`);
   };
 
   return (

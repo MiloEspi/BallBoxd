@@ -296,6 +296,13 @@ export function fetchProfileRatedMatches(username: string, q: string = '') {
   });
 }
 
+// Profile followed teams list.
+export function fetchProfileFollowedTeams(username: string) {
+  return authRequest<TeamsResponse>(`/profile/${username}/teams`, {
+    method: 'GET',
+  });
+}
+
 // Teams catalog endpoint with follow status when authenticated.
 export function fetchTeams() {
   return authRequest<TeamsResponse>('/teams', {

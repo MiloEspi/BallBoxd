@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 
 import ImageUpload from '@/app/components/ui/ImageUpload';
 import { updateProfileMemory } from '@/app/lib/api';
-import type { FeaturedPrimaryImage, RatingWithMatch } from '@/app/lib/types';
+import type { RatingWithMatch } from '@/app/lib/types';
 
 type FeaturedMatchEditorModalProps = {
   username: string;
@@ -28,15 +28,9 @@ export default function FeaturedMatchEditorModal({
   const [representative, setRepresentative] = useState(
     rating.representative_photo_url ?? '',
   );
-  const [primary, setPrimary] = useState<FeaturedPrimaryImage>(
-    rating.featured_primary_image ?? 'representative',
-  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [hasPending, setHasPending] = useState(false);
-
-  const hasStadium = Boolean(rating.attended && rating.stadium_photo_url);
-  const hasRepresentative = Boolean(representative);
 
   const handleSave = async () => {
     setError('');
@@ -53,7 +47,7 @@ export default function FeaturedMatchEditorModal({
       await updateProfileMemory(username, rating.match.id, {
         featured_note: note.trim(),
         representative_photo_url: representative,
-        featured_primary_image: primary,
+        featured_primary_image: 'representative',
       });
       onSaved();
       onClose();
@@ -71,7 +65,6 @@ export default function FeaturedMatchEditorModal({
   useEffect(() => {
     setNote(rating.featured_note ?? '');
     setRepresentative(rating.representative_photo_url ?? '');
-    setPrimary(rating.featured_primary_image ?? 'representative');
     setError('');
     setHasPending(false);
   }, [rating.match.id]);
@@ -152,54 +145,15 @@ export default function FeaturedMatchEditorModal({
               value={representative}
               onChange={(value) => {
                 setRepresentative(value);
-                if (!hasRepresentative) {
-                  setPrimary('representative');
-                }
               }}
               onClear={() => {
                 setRepresentative('');
-                setPrimary('representative');
               }}
               minSize={500}
               previewClassName="max-w-[260px] max-h-[260px]"
               onPendingChange={setHasPending}
               disabled={saving}
             />
-
-            {hasStadium && hasRepresentative && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Imagen principal
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(['representative', 'stadium'] as FeaturedPrimaryImage[]).map(
-                    (value) => (
-                      <button
-                        key={value}
-                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${
-                          primary === value
-                            ? 'border-emerald-400/60 bg-emerald-400/10 text-emerald-100'
-                            : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-600'
-                        }`}
-                        type="button"
-                        onClick={() => setPrimary(value)}
-                      >
-                        <span>
-                          {value === 'representative'
-                            ? 'Representativa'
-                            : 'Desde la cancha'}
-                        </span>
-                        {primary === value && (
-                          <span className="text-xs uppercase tracking-[0.2em]">
-                            Principal
-                          </span>
-                        )}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
-            )}
 
             {error && (
               <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">

@@ -45,7 +45,7 @@ export default function SiteHeader() {
           ) : (
             <>
               <Link
-                href="/login"
+                href="/login?mode=login"
                 className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 transition hover:border-slate-500"
               >
                 Iniciar sesion

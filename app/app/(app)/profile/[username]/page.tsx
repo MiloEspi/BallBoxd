@@ -5,7 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 
 import {
   ApiError,
+  fetchMe,
   fetchProfileActivity,
+  fetchProfileFollowedTeams,
   fetchProfileHighlights,
   fetchProfileStats,
 } from '@/app/lib/api';
@@ -13,12 +15,14 @@ import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import MatchSummaryCard from '@/app/components/match/MatchSummaryCard';
+import ProfileAvatarModal from '@/app/components/profile/ProfileAvatarModal';
 import ProfileMemoriesSection from '@/app/components/profile/ProfileMemoriesSection';
 import type {
   ProfileActivityResponse,
   ProfileHighlightsResponse,
   ProfileStatsResponse,
   TeamDistributionItem,
+  Team,
   RatingWithMatch,
 } from '@/app/lib/types';
 import SegmentedControl from '@/app/ui/segmented-control';
@@ -415,6 +419,13 @@ export default function Page() {
     activity: null,
     highlights: null,
   });
+  const [isOwner, setIsOwner] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useState(false);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+  const [teamsData, setTeamsData] = useState<Team[]>([]);
 
   // Updates the loading flag for a specific tab.
   const setTabLoading = (tab: TabKey, value: boolean) => {
@@ -493,6 +504,11 @@ export default function Page() {
     setActivityData(null);
     setHighlightsData(null);
     setErrors({ stats: null, activity: null, highlights: null });
+    setAvatarOpen(false);
+    setTeamsOpen(false);
+    setTeamsLoading(false);
+    setTeamsError(null);
+    setTeamsData([]);
   };
 
   // Loads tab data when the active tab or range changes.
@@ -585,6 +601,69 @@ export default function Page() {
     router.push('/matches');
   };
 
+  const handleAvatarSave = (nextValue: string) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`bbx-avatar-${username}`, nextValue);
+    }
+    setAvatarUrl(nextValue);
+  };
+
+  const handleTeamsToggle = async () => {
+    if (!username) {
+      return;
+    }
+    const nextOpen = !teamsOpen;
+    setTeamsOpen(nextOpen);
+    if (!nextOpen || teamsLoading || teamsData.length > 0) {
+      return;
+    }
+    setTeamsLoading(true);
+    setTeamsError(null);
+    try {
+      const response = await fetchProfileFollowedTeams(username);
+      setTeamsData(response.results ?? []);
+    } catch (err) {
+      const message =
+        err instanceof ApiError && err.status === 401
+          ? 'Inicia sesion para ver los equipos seguidos.'
+          : 'No pudimos cargar los equipos.';
+      setTeamsError(message);
+    } finally {
+      setTeamsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!username) {
+      return;
+    }
+    let cancelled = false;
+    const loadOwner = async () => {
+      try {
+        const me = await fetchMe();
+        if (!cancelled) {
+          setIsOwner(me.username === username);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsOwner(false);
+        }
+      }
+    };
+    loadOwner();
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  useEffect(() => {
+    if (!username || typeof window === 'undefined') {
+      return;
+    }
+    const stored = window.localStorage.getItem(`bbx-avatar-${username}`) ?? '';
+    setAvatarUrl(stored);
+  }, [username]);
+
   useEffect(handleUsernameChange, [username]);
   useEffect(handleTabFetch, [
     activeTab,
@@ -610,22 +689,130 @@ export default function Page() {
 
   const profileUser =
     statsData?.user ?? activityData?.user ?? highlightsData?.user ?? null;
+  const displayUsername = profileUser?.username ?? username;
+  const initials = displayUsername.slice(0, 2).toUpperCase();
+  const teamsCount = statsData?.stats.teams_followed;
 
   return (
     <section className="space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-          Profile
-        </p>
-        <h1 className="text-2xl font-semibold">
-          @{profileUser?.username ?? username}
-        </h1>
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-slate-800 bg-slate-900/60 text-sm font-semibold text-slate-200">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={`Avatar de ${displayUsername}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span>{initials}</span>
+              )}
+            </div>
+            {isOwner && (
+              <button
+                className="absolute -bottom-2 -right-2 rounded-full border border-slate-700 bg-slate-950/90 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+                type="button"
+                onClick={() => setAvatarOpen(true)}
+              >
+                Foto
+              </button>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+              Profile
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold">@{displayUsername}</h1>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <button
+                className="rounded-full border border-slate-800 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-600"
+                type="button"
+                onClick={handleTeamsToggle}
+              >
+                Ver equipos que sigue
+                {typeof teamsCount === 'number' ? ` (${teamsCount})` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
         <p className="text-sm text-slate-400">
           Switch between stats, activity, and highlights.
         </p>
       </header>
 
+      {teamsOpen && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+              Equipos que sigue
+            </p>
+            <button
+              className="text-[10px] uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
+              type="button"
+              onClick={() => setTeamsOpen(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+          {teamsLoading && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonBlock key={`teams-skeleton-${index}`} className="h-10" />
+              ))}
+            </div>
+          )}
+          {!teamsLoading && teamsError && (
+            <p className="mt-4 text-sm text-rose-200">{teamsError}</p>
+          )}
+          {!teamsLoading && !teamsError && teamsData.length === 0 && (
+            <p className="mt-4 text-sm text-slate-400">
+              Todavia no sigue equipos.
+            </p>
+          )}
+          {!teamsLoading && !teamsError && teamsData.length > 0 && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {teamsData.map((team) => (
+                <div
+                  key={team.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-800 bg-slate-900/60 text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                    {team.logo_url ? (
+                      <img
+                        src={team.logo_url}
+                        alt={team.name}
+                        className="h-full w-full object-contain p-1"
+                      />
+                    ) : (
+                      <span>{team.name.slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-100">
+                      {team.name}
+                    </p>
+                    {team.country && (
+                      <p className="text-xs text-slate-500">{team.country}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <ProfileMemoriesSection username={username} />
+
+      <ProfileAvatarModal
+        isOpen={avatarOpen}
+        value={avatarUrl}
+        onClose={() => setAvatarOpen(false)}
+        onSave={handleAvatarSave}
+      />
 
       <div className="flex flex-wrap items-center gap-4">
         <SegmentedControl
