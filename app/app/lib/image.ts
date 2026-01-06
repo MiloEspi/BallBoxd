@@ -1,7 +1,7 @@
 // Client-side image helpers for square cropping and resizing.
 export const processSquareImage = (
   file: File,
-  minSize: number = 800,
+  minSize: number = 500,
 ): Promise<string> => {
   if (!file.type.startsWith('image/')) {
     return Promise.reject(new Error('El archivo no es una imagen.'));

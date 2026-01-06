@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import StadiumPhotoModal from '@/app/components/match/StadiumPhotoModal';
 import { updateMatchMemory } from '@/app/lib/api';
-import { processSquareImage } from '@/app/lib/image';
 import type { Rating } from '@/app/lib/types';
 
 type MatchMemoryPanelProps = {
@@ -20,12 +20,12 @@ export default function MatchMemoryPanel({
   onRequireRating,
   onUpdated,
 }: MatchMemoryPanelProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const [attended, setAttended] = useState(Boolean(rating?.attended));
   const [photo, setPhoto] = useState(rating?.stadium_photo_url ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => {
     setAttended(Boolean(rating?.attended));
@@ -49,42 +49,6 @@ export default function MatchMemoryPanel({
       setAttended(attended);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handlePickFile = () => {
-    if (!saving) {
-      inputRef.current?.click();
-    }
-  };
-
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    if (!rating) {
-      onRequireRating();
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const nextValue = await processSquareImage(file, 800);
-      await updateMatchMemory(matchId, {
-        attended: true,
-        stadium_photo_url: nextValue,
-      });
-      setAttended(true);
-      setPhoto(nextValue);
-      onUpdated();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
-    } finally {
-      setSaving(false);
-      event.target.value = '';
     }
   };
 
@@ -140,10 +104,10 @@ export default function MatchMemoryPanel({
             <button
               className="rounded-full border border-slate-700 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
               type="button"
-              onClick={handlePickFile}
+              onClick={() => setUploadOpen(true)}
               disabled={saving}
             >
-              {photo ? 'Cambiar archivo' : 'Subir archivo'}
+              {photo ? 'Cambiar foto' : 'Subir foto'}
             </button>
           </div>
           {photo && (
@@ -165,13 +129,30 @@ export default function MatchMemoryPanel({
         </div>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-        disabled={saving}
+      <StadiumPhotoModal
+        isOpen={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onConfirm={async (value) => {
+          if (!rating) {
+            onRequireRating();
+            return;
+          }
+          setSaving(true);
+          setError('');
+          try {
+            await updateMatchMemory(matchId, {
+              attended: true,
+              stadium_photo_url: value,
+            });
+            setAttended(true);
+            setPhoto(value);
+            onUpdated();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+          } finally {
+            setSaving(false);
+          }
+        }}
       />
 
       {previewOpen && photo && (

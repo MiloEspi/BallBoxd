@@ -10,6 +10,7 @@ import type { FeaturedPrimaryImage, RatingWithMatch } from '@/app/lib/types';
 type FeaturedMatchEditorModalProps = {
   username: string;
   rating: RatingWithMatch;
+  isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -18,6 +19,7 @@ type FeaturedMatchEditorModalProps = {
 export default function FeaturedMatchEditorModal({
   username,
   rating,
+  isOpen,
   onClose,
   onSaved,
 }: FeaturedMatchEditorModalProps) {
@@ -31,6 +33,7 @@ export default function FeaturedMatchEditorModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [hasPending, setHasPending] = useState(false);
 
   const hasStadium = Boolean(rating.attended && rating.stadium_photo_url);
   const hasRepresentative = Boolean(representative);
@@ -39,6 +42,10 @@ export default function FeaturedMatchEditorModal({
     setError('');
     if (!representative) {
       setError('La imagen destacada es obligatoria.');
+      return;
+    }
+    if (hasPending) {
+      setError('Confirma la imagen antes de guardar.');
       return;
     }
     setSaving(true);
@@ -61,15 +68,28 @@ export default function FeaturedMatchEditorModal({
     setMounted(true);
   }, []);
 
-  const handleClose = () => {
-    if (!representative) {
-      setError('La imagen destacada es obligatoria.');
+  useEffect(() => {
+    setNote(rating.featured_note ?? '');
+    setRepresentative(rating.representative_photo_url ?? '');
+    setPrimary(rating.featured_primary_image ?? 'representative');
+    setError('');
+    setHasPending(false);
+  }, [rating.match.id]);
+
+  useEffect(() => {
+    if (!isOpen) {
       return;
     }
-    onClose();
-  };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
 
-  if (!mounted) {
+  if (!mounted || !isOpen) {
     return null;
   }
 
@@ -79,12 +99,12 @@ export default function FeaturedMatchEditorModal({
       style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          handleClose();
+          onClose();
         }
       }}
     >
-      <div className="relative flex min-h-screen items-center justify-center px-4">
-        <div className="relative w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] animate-[modal-in_320ms_cubic-bezier(0.16,1,0.3,1)]">
+      <div className="relative flex min-h-screen items-start justify-center px-4 py-8">
+        <div className="relative flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] animate-[modal-in_320ms_cubic-bezier(0.16,1,0.3,1)] max-h-[85vh]">
           <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -97,13 +117,15 @@ export default function FeaturedMatchEditorModal({
             <button
               className="text-sm text-slate-500 transition hover:text-slate-200"
               type="button"
-              onClick={handleClose}
+              onClick={onClose}
+              aria-label="Cerrar"
+              title="Cerrar"
             >
-              Cerrar
+              X
             </button>
           </div>
 
-          <div className="space-y-6 px-6 py-6">
+          <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 py-6">
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Por que este partido es especial para vos
@@ -123,6 +145,10 @@ export default function FeaturedMatchEditorModal({
             <ImageUpload
               label="Imagen destacada (obligatoria)"
               helper="La imagen que representa el partido en tu perfil."
+              suggestions={[
+                'Choose an image that represents what this match means to you.',
+                'Recortes cuadrados funcionan mejor.',
+              ]}
               value={representative}
               onChange={(value) => {
                 setRepresentative(value);
@@ -134,6 +160,9 @@ export default function FeaturedMatchEditorModal({
                 setRepresentative('');
                 setPrimary('representative');
               }}
+              minSize={500}
+              previewClassName="max-w-[260px] max-h-[260px]"
+              onPendingChange={setHasPending}
               disabled={saving}
             />
 
@@ -183,7 +212,7 @@ export default function FeaturedMatchEditorModal({
             <button
               className="rounded-full border border-slate-700 px-5 py-2 text-xs uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
               type="button"
-              onClick={handleClose}
+              onClick={onClose}
               disabled={saving}
             >
               Cancelar
@@ -192,7 +221,7 @@ export default function FeaturedMatchEditorModal({
               className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || hasPending}
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>

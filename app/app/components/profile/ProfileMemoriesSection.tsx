@@ -31,6 +31,7 @@ export default function ProfileMemoriesSection({
   const [isOwner, setIsOwner] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
   const [editing, setEditing] = useState<RatingWithMatch | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [reordering, setReordering] = useState(false);
@@ -87,6 +88,7 @@ export default function ProfileMemoriesSection({
     if (next) {
       setEditing(next);
       setPendingEditMatchId(null);
+      setEditorOpen(true);
     } else {
       setPendingEditMatchId(null);
     }
@@ -96,6 +98,7 @@ export default function ProfileMemoriesSection({
     const response = await addProfileMemory(username, matchId, replaceMatchId);
     setData(response);
     setPendingEditMatchId(matchId);
+    setEditorOpen(true);
   };
 
   const handleRemove = async (matchId: number) => {
@@ -195,7 +198,7 @@ export default function ProfileMemoriesSection({
             Partidos que me marcaron
           </p>
         </div>
-        <div className="grid gap-3 grid-cols-2">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <SkeletonBlock key={`memories-skeleton-${index}`} className="h-64" />
           ))}
@@ -239,7 +242,7 @@ export default function ProfileMemoriesSection({
         )}
       </div>
 
-      <div className="grid gap-3 grid-cols-2">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => {
           const rating = featuredMatches[index] ?? null;
           if (rating) {
@@ -250,7 +253,10 @@ export default function ProfileMemoriesSection({
                 isOwner={isOwner}
                 isDragging={draggingId === rating.match.id}
                 isDragOver={dragOverId === rating.match.id}
-                onEdit={setEditing}
+                onEdit={(next) => {
+                  setEditing(next);
+                  setEditorOpen(true);
+                }}
                 onRemove={handleRemove}
                 onSwapPrimary={handleSwapPrimary}
                 onDragStart={handleDragStart(rating.match.id)}
@@ -298,7 +304,8 @@ export default function ProfileMemoriesSection({
         <FeaturedMatchEditorModal
           username={username}
           rating={editing}
-          onClose={() => setEditing(null)}
+          isOpen={editorOpen}
+          onClose={() => setEditorOpen(false)}
           onSaved={loadMemories}
         />
       )}
