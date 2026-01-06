@@ -103,19 +103,19 @@ const createDemoStore = (): DemoStore => {
       id: 1,
       username: 'camilo',
       email: 'camilo@ballboxd.test',
-      password: '1234',
+      password: '12345678',
     },
     {
       id: 2,
       username: 'alice',
       email: 'alice@ballboxd.test',
-      password: '1234',
+      password: '12345678',
     },
     {
       id: 3,
       username: 'bob',
       email: 'bob@ballboxd.test',
-      password: '1234',
+      password: '12345678',
     },
   ];
 
