@@ -13,6 +13,7 @@ import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import MatchSummaryCard from '@/app/components/match/MatchSummaryCard';
+import ProfileMemoriesSection from '@/app/components/profile/ProfileMemoriesSection';
 import type {
   ProfileActivityResponse,
   ProfileHighlightsResponse,
@@ -623,6 +624,8 @@ export default function Page() {
           Switch between stats, activity, and highlights.
         </p>
       </header>
+
+      <ProfileMemoriesSection username={username} />
 
       <div className="flex flex-wrap items-center gap-4">
         <SegmentedControl

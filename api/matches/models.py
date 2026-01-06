@@ -134,6 +134,19 @@ class Rating(models.Model):
         choices=MinutesWatched.choices,
     )
     review = models.CharField(max_length=240, blank=True, default="")
+    attended = models.BooleanField(default=False)
+    stadium_photo_url = models.TextField(blank=True, default="")
+    representative_photo_url = models.TextField(blank=True, default="")
+    featured_note = models.CharField(max_length=240, blank=True, default="")
+    featured_order = models.PositiveSmallIntegerField(null=True, blank=True)
+    featured_primary_image = models.CharField(
+        max_length=20,
+        choices=[
+            ("representative", "Representative"),
+            ("stadium", "Stadium"),
+        ],
+        default="representative",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -151,6 +164,16 @@ class Rating(models.Model):
             models.CheckConstraint(
                 condition=Q(score__gte=0) & Q(score__lte=100),
                 name="rating_score_0_100",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "featured_order"],
+                condition=Q(featured_order__isnull=False),
+                name="uniq_user_featured_order",
+            ),
+            models.CheckConstraint(
+                condition=Q(featured_order__isnull=True)
+                | (Q(featured_order__gte=1) & Q(featured_order__lte=4)),
+                name="rating_featured_order_1_4",
             ),
         ]
 

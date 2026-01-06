@@ -41,6 +41,12 @@ type DemoRating = {
   score: number;
   minutes_watched: string;
   review: string;
+  attended: boolean;
+  stadium_photo_url?: string | null;
+  representative_photo_url?: string | null;
+  featured_note?: string | null;
+  featured_order?: number | null;
+  featured_primary_image?: 'representative' | 'stadium';
   created_at: string;
 };
 
@@ -201,6 +207,12 @@ const createDemoStore = (): DemoStore => {
       score: 85,
       minutes_watched: 'FULL',
       review: 'Intense game with a brilliant second half.',
+      attended: true,
+      stadium_photo_url: '/hero-mobile.png',
+      representative_photo_url: '/hero-desktop.png',
+      featured_note: 'Fue el primer partido con mi viejo.',
+      featured_order: 1,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, 0, 2),
     },
     {
@@ -210,6 +222,12 @@ const createDemoStore = (): DemoStore => {
       score: 78,
       minutes_watched: 'ALMOST_ALL',
       review: 'Great tempo, could have been a draw.',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, 0, 3),
     },
     {
@@ -219,6 +237,12 @@ const createDemoStore = (): DemoStore => {
       score: 90,
       minutes_watched: 'FULL',
       review: '',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, 0, 4),
     },
     {
@@ -228,6 +252,12 @@ const createDemoStore = (): DemoStore => {
       score: 92,
       minutes_watched: 'FULL',
       review: 'Clasico delivered, wild ending.',
+      attended: true,
+      stadium_photo_url: '/hero-desktop.png',
+      representative_photo_url: '/hero-mobile.png',
+      featured_note: 'Noche eterna en el Bernabeu.',
+      featured_order: 2,
+      featured_primary_image: 'stadium',
       created_at: dateWithOffset(baseDate, -2, 2),
     },
     {
@@ -237,6 +267,12 @@ const createDemoStore = (): DemoStore => {
       score: 88,
       minutes_watched: 'ONE_HALF',
       review: '',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, -2, 3),
     },
     {
@@ -246,6 +282,12 @@ const createDemoStore = (): DemoStore => {
       score: 70,
       minutes_watched: 'LT_30',
       review: 'Slow start, improved late on.',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, -1, 2),
     },
     {
@@ -255,6 +297,12 @@ const createDemoStore = (): DemoStore => {
       score: 76,
       minutes_watched: 'ALMOST_ALL',
       review: 'Back and forth, fun finish.',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '/hero-mobile.png',
+      featured_note: 'Termino 2-2 y nos abrazamos.',
+      featured_order: 3,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, -4, 1),
     },
     {
@@ -264,6 +312,12 @@ const createDemoStore = (): DemoStore => {
       score: 66,
       minutes_watched: 'FULL',
       review: 'Tactical, not much flair.',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, -3, 2),
     },
     {
@@ -273,6 +327,12 @@ const createDemoStore = (): DemoStore => {
       score: 81,
       minutes_watched: 'FULL',
       review: 'Solid defensive display.',
+      attended: false,
+      stadium_photo_url: '',
+      representative_photo_url: '',
+      featured_note: '',
+      featured_order: null,
+      featured_primary_image: 'representative',
       created_at: dateWithOffset(baseDate, -5, 2),
     },
   ];
@@ -485,6 +545,12 @@ export const toRating = (store: DemoStore, rating: DemoRating) => {
     score: rating.score,
     minutes_watched: rating.minutes_watched,
     review: rating.review,
+    attended: rating.attended,
+    stadium_photo_url: rating.stadium_photo_url ?? '',
+    representative_photo_url: rating.representative_photo_url ?? '',
+    featured_note: rating.featured_note ?? '',
+    featured_order: rating.featured_order ?? null,
+    featured_primary_image: rating.featured_primary_image ?? 'representative',
     created_at: rating.created_at,
   };
 };

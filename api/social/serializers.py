@@ -47,6 +47,17 @@ class ProfileHighlightsResponseSerializer(serializers.Serializer):
     low_rated = RatingWithMatchSerializer(many=True)
 
 
+class ProfileMemoriesResponseSerializer(serializers.Serializer):
+    user = UserMiniSerializer()
+    max_count = serializers.IntegerField()
+    results = RatingWithMatchSerializer(many=True)
+
+
+class ProfileRatedResponseSerializer(serializers.Serializer):
+    user = UserMiniSerializer()
+    results = RatingWithMatchSerializer(many=True)
+
+
 class ProfileResponseSerializer(serializers.Serializer):
     user = UserMiniSerializer()
     stats = ProfileStatsSerializer()

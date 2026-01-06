@@ -5,6 +5,7 @@ import unicodedata
 from typing import Optional
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Avg, Case, Count, Exists, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -27,7 +28,9 @@ from .models import Follow, UserFollow
 from .serializers import (
     ProfileActivityResponseSerializer,
     ProfileHighlightsResponseSerializer,
+    ProfileMemoriesResponseSerializer,
     ProfileResponseSerializer,
+    ProfileRatedResponseSerializer,
     ProfileStatsResponseSerializer,
 )
 
@@ -362,6 +365,254 @@ class ProfileHighlightsView(APIView):
             "low_rated": ratings_qs.order_by("score", "-created_at")[:5],
         }
         serializer = ProfileHighlightsResponseSerializer(payload)
+        return Response(serializer.data)
+
+
+class ProfileMemoriesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+        ratings_qs = (
+            Rating.objects.filter(user=profile_user, featured_order__isnull=False)
+            .select_related(
+                "match",
+                "match__tournament",
+                "match__home_team",
+                "match__away_team",
+            )
+            .order_by("featured_order")
+        )
+
+        payload = {
+            "user": profile_user,
+            "max_count": 4,
+            "results": ratings_qs,
+        }
+        serializer = ProfileMemoriesResponseSerializer(payload)
+        return Response(serializer.data)
+
+    def post(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+        if request.user != profile_user:
+            return Response(
+                {"detail": "You cannot edit this profile."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        match_id = request.data.get("match_id")
+        replace_match_id = request.data.get("replace_match_id")
+        if not match_id or not str(match_id).isdigit():
+            return Response(
+                {"detail": "match_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rating = Rating.objects.filter(
+            user=profile_user, match_id=int(match_id)
+        ).first()
+        if not rating:
+            return Response(
+                {"detail": "You need to rate this match first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if rating.featured_order is not None:
+            return self.get(request, username)
+
+        featured_qs = Rating.objects.filter(
+            user=profile_user, featured_order__isnull=False
+        )
+        featured_count = featured_qs.count()
+
+        if featured_count >= 4 and not replace_match_id:
+            current_ids = list(
+                featured_qs.order_by("featured_order").values_list("match_id", flat=True)
+            )
+            return Response(
+                {
+                    "detail": "Featured list is full.",
+                    "current": current_ids,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        replace_rating = None
+        if replace_match_id:
+            if not str(replace_match_id).isdigit():
+                return Response(
+                    {"detail": "replace_match_id must be numeric."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            replace_rating = featured_qs.filter(
+                match_id=int(replace_match_id)
+            ).first()
+            if not replace_rating:
+                return Response(
+                    {"detail": "replace_match_id is not featured."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        with transaction.atomic():
+            if replace_rating:
+                target_order = replace_rating.featured_order
+                replace_rating.featured_order = None
+                replace_rating.save(update_fields=["featured_order"])
+            else:
+                taken = set(
+                    featured_qs.values_list("featured_order", flat=True)
+                )
+                target_order = next(
+                    (value for value in range(1, 5) if value not in taken), 1
+                )
+            rating.featured_order = target_order
+            rating.save(update_fields=["featured_order"])
+
+        return self.get(request, username)
+
+    def patch(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+        if request.user != profile_user:
+            return Response(
+                {"detail": "You cannot edit this profile."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        order_list = request.data.get("order")
+        match_id = request.data.get("match_id")
+        if isinstance(order_list, list):
+            cleaned = [item for item in order_list if str(item).isdigit()]
+            if len(cleaned) != len(order_list):
+                return Response(
+                    {"detail": "Order list must contain numeric match ids."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            match_ids = [int(item) for item in cleaned]
+            featured_qs = Rating.objects.filter(
+                user=profile_user, featured_order__isnull=False
+            )
+            current_ids = list(
+                featured_qs.values_list("match_id", flat=True)
+            )
+            if len(set(match_ids)) != len(match_ids):
+                return Response(
+                    {"detail": "Order list contains duplicates."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if sorted(match_ids) != sorted(current_ids):
+                return Response(
+                    {"detail": "Order list must match featured matches."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            with transaction.atomic():
+                featured_qs.update(featured_order=None)
+                for index, item in enumerate(match_ids, start=1):
+                    Rating.objects.filter(
+                        user=profile_user, match_id=item
+                    ).update(featured_order=index)
+            return self.get(request, username)
+
+        if match_id and str(match_id).isdigit():
+            rating = Rating.objects.filter(
+                user=profile_user, match_id=int(match_id)
+            ).first()
+            if not rating or rating.featured_order is None:
+                return Response(
+                    {"detail": "Match is not featured."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if "featured_note" in request.data:
+                note = request.data.get("featured_note")
+                if note is None:
+                    note = ""
+                if not isinstance(note, str):
+                    return Response(
+                        {"detail": "featured_note must be a string."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if len(note) > 240:
+                    return Response(
+                        {"detail": "featured_note is too long."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                rating.featured_note = note
+            if "representative_photo_url" in request.data:
+                rep_url = request.data.get("representative_photo_url")
+                if rep_url is None:
+                    rep_url = ""
+                if not isinstance(rep_url, str):
+                    return Response(
+                        {"detail": "representative_photo_url must be a string."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                rating.representative_photo_url = rep_url
+            if "featured_primary_image" in request.data:
+                primary = request.data.get("featured_primary_image")
+                if primary not in {"representative", "stadium"}:
+                    return Response(
+                        {"detail": "featured_primary_image is invalid."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                rating.featured_primary_image = primary
+            if (
+                rating.featured_primary_image == "stadium"
+                and not rating.stadium_photo_url
+            ):
+                rating.featured_primary_image = "representative"
+            rating.save()
+            return self.get(request, username)
+
+        return Response(
+            {"detail": "No valid update payload provided."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class ProfileMemoryDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, username, match_id):
+        profile_user = get_object_or_404(User, username=username)
+        if request.user != profile_user:
+            return Response(
+                {"detail": "You cannot edit this profile."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        Rating.objects.filter(
+            user=profile_user, match_id=match_id
+        ).update(featured_order=None)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProfileRatedMatchesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+        if request.user != profile_user:
+            return Response(
+                {"detail": "You cannot access these ratings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        query = (request.query_params.get("q") or "").strip()
+        ratings_qs = Rating.objects.filter(user=profile_user).select_related(
+            "match",
+            "match__tournament",
+            "match__home_team",
+            "match__away_team",
+        )
+        if query:
+            ratings_qs = ratings_qs.filter(
+                Q(match__home_team__name__icontains=query)
+                | Q(match__away_team__name__icontains=query)
+                | Q(match__tournament__name__icontains=query)
+            )
+
+        payload = {
+            "user": profile_user,
+            "results": ratings_qs.order_by("-created_at")[:50],
+        }
+        serializer = ProfileRatedResponseSerializer(payload)
         return Response(serializer.data)
 
 

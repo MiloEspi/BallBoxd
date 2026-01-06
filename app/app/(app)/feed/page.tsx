@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import MatchCard from '@/app/components/match/MatchCard';
-import RateMatchModal from '@/app/components/match/RateMatchModal';
-import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
+import FeedMatchCard from '@/app/components/match/FeedMatchCard';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import { ApiError, fetchFeed } from '@/app/lib/api';
+import {
+  getCenteredWindowDays,
+  getDateKey,
+  getRelativeDayLabel,
+  isSameDay,
+  startOfDay,
+} from '@/app/lib/date-range';
 import { getStatusMeta } from '@/app/lib/match-ui';
 import type { Match } from '@/app/lib/types';
 import SegmentedControl from '@/app/ui/segmented-control';
@@ -18,6 +23,8 @@ type ErrorState = {
   action: 'retry' | 'login';
 };
 
+type TransitionPhase = 'idle' | 'fadeOut' | 'fadeIn';
+
 // Feed page showing recent matches from followed teams.
 export default function Page() {
   const router = useRouter();
@@ -25,16 +32,11 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
-  const [selectedInteraction, setSelectedInteraction] = useState('ALL');
-  const [selectedRange, setSelectedRange] = useState('7');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [activeMatch, setActiveMatch] = useState<Match | null>(null);
-  const [modalOrigin, setModalOrigin] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [selectedRating, setSelectedRating] = useState('ALL');
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDay, setSelectedDay] = useState<Date>(() => today);
+  const [transitionPhase, setTransitionPhase] =
+    useState<TransitionPhase>('idle');
 
   // Loads the feed data from the API and updates UI state.
   const loadFeed = async () => {
@@ -65,154 +67,122 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [selectedStatus, selectedInteraction, selectedRange, selectedDate, matches]);
-
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)');
-    const updateSize = () => setPageSize(media.matches ? 12 : 20);
-    updateSize();
-    media.addEventListener('change', updateSize);
-    return () => media.removeEventListener('change', updateSize);
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-  }, [pageSize]);
+    setTransitionPhase('fadeOut');
+    const fadeTimeout = window.setTimeout(() => {
+      setTransitionPhase('fadeIn');
+    }, 100);
+    const doneTimeout = window.setTimeout(() => {
+      setTransitionPhase('idle');
+    }, 220);
+    return () => {
+      window.clearTimeout(fadeTimeout);
+      window.clearTimeout(doneTimeout);
+    };
+  }, [selectedDay, selectedStatus, selectedRating]);
 
   const statusOptions = [
-    { value: 'ALL', label: 'Todo' },
+    { value: 'ALL', label: 'All' },
     { value: 'LIVE', label: 'Live' },
-    { value: 'UPCOMING', label: 'Upcoming' },
     { value: 'FINISHED', label: 'Finished' },
   ];
-  const interactionOptions = [
+  const ratingOptions = [
     { value: 'ALL', label: 'All' },
     { value: 'UNRATED', label: 'Unrated' },
-    { value: 'RATED', label: 'Rated' },
-  ];
-  const rangeOptions = [
-    { value: 'today', label: 'Today' },
-    { value: '7', label: '7 days' },
-    { value: '30', label: '30 days' },
   ];
 
-  const now = useMemo(() => new Date(), []);
-  const rangeDays = selectedRange === 'today' ? 1 : Number(selectedRange);
-
-  const baseMatches = useMemo(() => {
-    const base = matches.filter((match) => {
+  const statusRatingMatches = useMemo(() => {
+    return matches.filter((match) => {
       const meta = getStatusMeta(match.status, match.date_time);
-      if (selectedStatus !== 'ALL') {
-        const expected =
-          selectedStatus === 'UPCOMING' ? 'PENDING' : selectedStatus;
-        if (meta.label !== expected) {
-          return false;
-        }
-      }
-      if (selectedInteraction === 'RATED' && !match.my_rating) {
+      if (selectedStatus !== 'ALL' && meta.label !== selectedStatus) {
         return false;
       }
-      if (selectedInteraction === 'UNRATED' && match.my_rating) {
+      if (selectedRating === 'UNRATED' && match.my_rating) {
         return false;
       }
-      const date = new Date(match.date_time);
-      if (Number.isNaN(date.getTime())) {
-        return false;
-      }
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      start.setDate(start.getDate() - (rangeDays - 1));
-      const end = new Date(now);
-      end.setHours(23, 59, 59, 999);
-      if (selectedStatus === 'UPCOMING') {
-        const upcomingStart = new Date(now);
-        upcomingStart.setHours(0, 0, 0, 0);
-        const upcomingEnd = new Date(now);
-        upcomingEnd.setHours(23, 59, 59, 999);
-        upcomingEnd.setDate(upcomingEnd.getDate() + (rangeDays - 1));
-        return date >= upcomingStart && date <= upcomingEnd;
-      }
-      if (selectedStatus === 'ALL') {
-        const futureEnd = new Date(end);
-        futureEnd.setDate(futureEnd.getDate() + (rangeDays - 1));
-        return date >= start && date <= futureEnd;
-      }
-      return date >= start && date <= end;
+      return true;
     });
-    return base;
-  }, [
-    matches,
-    now,
-    rangeDays,
-    selectedInteraction,
-    selectedStatus,
-  ]);
+  }, [matches, selectedRating, selectedStatus]);
 
-  const filteredMatches = useMemo(() => {
-    if (!selectedDate) {
-      return baseMatches;
-    }
-    const key = getDateKey(selectedDate);
-    return baseMatches.filter(
-      (match) => getDateKey(new Date(match.date_time)) === key,
+  const selectedDayKey = useMemo(
+    () => getDateKey(selectedDay),
+    [selectedDay],
+  );
+
+  const dayMatches = useMemo(() => {
+    return statusRatingMatches.filter(
+      (match) => getDateKey(new Date(match.date_time)) === selectedDayKey,
     );
-  }, [baseMatches, selectedDate]);
+  }, [selectedDayKey, statusRatingMatches]);
 
-  const visibleCount = Math.min(filteredMatches.length, page * pageSize);
-  const visibleMatches = filteredMatches.slice(0, visibleCount);
+  const sortedMatches = useMemo(() => {
+    return [...dayMatches].sort(
+      (a, b) =>
+        new Date(a.date_time).getTime() - new Date(b.date_time).getTime(),
+    );
+  }, [dayMatches]);
 
-  const groupedMatches = useMemo(() => {
-    const groups = new Map<string, Match[]>();
-    visibleMatches.forEach((match) => {
-      const date = new Date(match.date_time);
-      const key = getDateKey(date);
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(match);
-    });
-    return Array.from(groups.entries()).map(([key, items]) => ({
-      key,
-      label: formatDayLabel(key, now),
-      items,
-    }));
-  }, [visibleMatches, now]);
-
-  const stripDays = useMemo(() => {
-    const days = [];
-    const base = new Date(now);
-    base.setHours(0, 0, 0, 0);
-    for (let i = 6; i >= 0; i -= 1) {
-      const day = new Date(base);
-      day.setDate(day.getDate() - i);
-      days.push(day);
-    }
-    return days;
-  }, [now]);
+  const stripDays = useMemo(() => getCenteredWindowDays(today, 3), [today]);
 
   const stripCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    baseMatches.forEach((match) => {
+    statusRatingMatches.forEach((match) => {
       const key = getDateKey(new Date(match.date_time));
+      if (!key) {
+        return;
+      }
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
     return counts;
-  }, [baseMatches]);
+  }, [statusRatingMatches]);
+
+  const selectedDayLabel = getRelativeDayLabel(selectedDay, today);
+  const selectedDayFull = selectedDay.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  const emptyTitle = useMemo(() => {
+    if (selectedDayLabel === 'Today') {
+      return 'No matches today.';
+    }
+    if (selectedDayLabel === 'Yesterday') {
+      return 'No matches yesterday.';
+    }
+    if (selectedDayLabel === 'Tomorrow') {
+      return 'No matches tomorrow.';
+    }
+    return `No matches on ${selectedDayFull}.`;
+  }, [selectedDayFull, selectedDayLabel]);
+
+  const matchCountLabel =
+    sortedMatches.length === 1
+      ? '1 match'
+      : `${sortedMatches.length} matches`;
 
   return (
     <section className="space-y-6">
-      <header>
+      <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Feed</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Recent matches from teams you follow.
+        <p className="text-sm text-slate-400">
+          Matches that matter to you today and recently.
         </p>
       </header>
 
       {loading && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonMatchCard key={`feed-skeleton-${index}`} />
+            <div
+              key={`feed-skeleton-${index}`}
+              className="rounded-2xl border border-white/10 bg-white/5 p-4"
+            >
+              <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/10" />
+              <div className="mt-4 space-y-2">
+                <div className="h-10 animate-pulse rounded bg-white/10" />
+                <div className="h-10 animate-pulse rounded bg-white/10" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -239,8 +209,8 @@ export default function Page() {
 
       {!loading && !error && matches.length > 0 && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[inset_0_0_30px_rgba(255,255,255,0.05)]">
-            <div className="flex flex-wrap items-center gap-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-wrap items-center gap-3">
               <SegmentedControl
                 options={statusOptions}
                 value={selectedStatus}
@@ -249,63 +219,47 @@ export default function Page() {
                 size="sm"
               />
               <SegmentedControl
-                options={interactionOptions}
-                value={selectedInteraction}
-                onChange={setSelectedInteraction}
-                ariaLabel="Filtrar por interaccion"
+                options={ratingOptions}
+                value={selectedRating}
+                onChange={setSelectedRating}
+                ariaLabel="Filtrar por rating"
                 size="sm"
               />
-              <SegmentedControl
-                options={rangeOptions}
-                value={selectedRange}
-                onChange={(value) => {
-                  setSelectedRange(value);
-                  setSelectedDate(null);
-                }}
-                ariaLabel="Rango rapido"
-                size="sm"
-              />
-              {selectedDate && (
-                <button
-                  type="button"
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
-                  onClick={() => setSelectedDate(null)}
-                >
-                  Clear day
-                </button>
-              )}
             </div>
-            <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
+            <div className="mt-4 flex items-center justify-center gap-2 overflow-x-auto pb-1">
               {stripDays.map((day) => {
                 const key = getDateKey(day);
-                const isActive = selectedDate
-                  ? getDateKey(selectedDate) === key
-                  : false;
+                const isSelected = isSameDay(day, selectedDay);
+                const isToday = isSameDay(day, today);
                 const count = stripCounts.get(key) ?? 0;
+                const dayLabel = getRelativeDayLabel(day, today);
                 return (
                   <button
                     key={key}
                     type="button"
-                    className={`min-w-[72px] rounded-full border px-3 py-2 text-left text-xs uppercase tracking-[0.2em] transition ${
-                      isActive
-                        ? 'border-white/30 bg-white/10 text-white'
-                        : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-                    }`}
-                    onClick={() => {
-                      setSelectedDate(
-                        isActive ? null : new Date(day.getTime()),
-                      );
-                    }}
+                    aria-pressed={isSelected}
+                    className={`min-w-[68px] rounded-2xl border px-3 py-2 text-left text-xs transition-all duration-200 ${
+                      isSelected
+                        ? 'border-white/30 bg-white/15 text-white shadow-[0_10px_25px_rgba(0,0,0,0.2)]'
+                        : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10'
+                    } ${isToday ? 'ring-1 ring-emerald-300/50' : ''}`}
+                    onClick={() => setSelectedDay(startOfDay(day))}
                   >
-                    <div className="flex items-center justify-between">
-                      <span>
-                        {day.toLocaleDateString('en-US', { weekday: 'short' })}
-                      </span>
+                    <div
+                      className={`flex items-center justify-between text-[11px] font-semibold ${
+                        isSelected ? 'text-white' : 'text-slate-300'
+                      }`}
+                    >
+                      <span>{dayLabel}</span>
                       {count > 0 && (
-                        <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                        <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
                       )}
                     </div>
-                    <div className="mt-1 text-base font-semibold text-white">
+                    <div
+                      className={`mt-1 text-base font-semibold ${
+                        isSelected ? 'text-white' : 'text-slate-100'
+                      }`}
+                    >
                       {day.getDate()}
                     </div>
                   </button>
@@ -314,97 +268,43 @@ export default function Page() {
             </div>
           </div>
 
-          {filteredMatches.length === 0 ? (
+          {sortedMatches.length === 0 ? (
             <StateEmpty
-              title="No matches for these filters yet."
-              actionLabel="Clear filters"
+              title={emptyTitle}
+              description="Try another day or clear filters."
+              actionLabel="Reset filters"
               onAction={() => {
                 setSelectedStatus('ALL');
-                setSelectedInteraction('ALL');
-                setSelectedRange('7');
-                setSelectedDate(null);
+                setSelectedRating('ALL');
+                setSelectedDay(today);
               }}
             />
           ) : (
-            <div className="space-y-8">
-              {groupedMatches.map((group) => (
-                <section key={group.key} className="space-y-4">
-                  <div className="sticky top-16 z-10 rounded-full border border-white/10 bg-slate-950/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-300 shadow-[inset_0_0_25px_rgba(255,255,255,0.05)] backdrop-blur">
-                    {group.label}
-                  </div>
-                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                    {group.items.map((match) => (
-                      <MatchCard
-                        key={match.id}
-                        match={match}
-                        onRate={(selected, origin) => {
-                          setActiveMatch(selected);
-                          setModalOrigin(origin ?? null);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-              {visibleCount < filteredMatches.length && (
-                <div className="flex justify-center">
-                  <button
-                    type="button"
-                    className="rounded-full border border-white/10 bg-white/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
-                    onClick={() => setPage((prev) => prev + 1)}
-                  >
-                    Load more
-                  </button>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold text-white">
+                    {selectedDayLabel}
+                  </p>
+                  <p className="text-xs text-slate-400">{selectedDayFull}</p>
                 </div>
-              )}
+                <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  {matchCountLabel}
+                </span>
+              </div>
+              <div
+                className={`grid gap-4 md:grid-cols-2 transition-opacity duration-200 ${
+                  transitionPhase === 'fadeOut' ? 'opacity-0' : 'opacity-100'
+                }`}
+              >
+                {sortedMatches.map((match) => (
+                  <FeedMatchCard key={match.id} match={match} />
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
-
-      {activeMatch && (
-        <RateMatchModal
-          matchId={activeMatch.id}
-          initialScore={activeMatch.my_rating?.score}
-          initialMinutesWatched={activeMatch.my_rating?.minutes_watched}
-          initialReview={activeMatch.my_rating?.review}
-          origin={modalOrigin}
-          onClose={() => {
-            setActiveMatch(null);
-            setModalOrigin(null);
-          }}
-          onSaved={loadFeed}
-        />
-      )}
     </section>
   );
 }
-
-const getDateKey = (value: Date) => {
-  if (Number.isNaN(value.getTime())) {
-    return '';
-  }
-  return value.toISOString().slice(0, 10);
-};
-
-const formatDayLabel = (dateKey: string, now: Date) => {
-  const date = new Date(dateKey);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown date';
-  }
-  const todayKey = getDateKey(now);
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const yesterdayKey = getDateKey(yesterday);
-  if (dateKey === todayKey) {
-    return 'Today';
-  }
-  if (dateKey === yesterdayKey) {
-    return 'Yesterday';
-  }
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};

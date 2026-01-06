@@ -34,6 +34,21 @@ const formatMinutes = (value: string) => {
   }
 };
 
+const StadiumIcon = () => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    className="h-3 w-3"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+  >
+    <path d="M3 19h18" />
+    <path d="M5 19V8l7-4 7 4v11" />
+    <path d="M8 12h8" />
+  </svg>
+);
+
 // Compact, clickable match summary card for profile activity/highlights.
 export default function MatchSummaryCard({ rating }: MatchSummaryCardProps) {
   const router = useRouter();
@@ -76,6 +91,12 @@ export default function MatchSummaryCard({ rating }: MatchSummaryCardProps) {
         <span className="rounded-full border border-slate-700 px-3 py-1 uppercase tracking-[0.2em] text-slate-400">
           {formatMinutes(rating.minutes_watched)}
         </span>
+        {rating.attended && (
+          <span className="flex items-center gap-2 rounded-full border border-emerald-400/40 px-3 py-1 uppercase tracking-[0.2em] text-emerald-200">
+            <StadiumIcon />
+            Estuve ahi
+          </span>
+        )}
         <span>{formatDate(rating.created_at)}</span>
       </div>
 

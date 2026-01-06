@@ -68,6 +68,12 @@ export async function POST(
     score: payload.score,
     minutes_watched: payload.minutes_watched,
     review: payload.review ?? '',
+    attended: false,
+    stadium_photo_url: '',
+    representative_photo_url: '',
+    featured_note: '',
+    featured_order: null,
+    featured_primary_image: 'representative',
     created_at: new Date().toISOString(),
   };
   store.nextIds.rating += 1;

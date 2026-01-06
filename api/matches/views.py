@@ -11,6 +11,8 @@ from .models import Match, Rating
 from .serializers import (
     MatchListSerializer,
     MatchDetailResponseSerializer,
+    RatingMemorySerializer,
+    RatingMemoryUpdateSerializer,
     RatingSerializer,
     RatingUpsertSerializer,
 )
@@ -201,3 +203,30 @@ class MatchRatingView(APIView):
         rating = serializer.save()
 
         return Response(RatingSerializer(rating).data)
+
+
+class MatchMemoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        match = get_object_or_404(Match, pk=pk)
+        rating = get_object_or_404(Rating, user=request.user, match=match)
+        return Response(RatingMemorySerializer(rating).data)
+
+    def patch(self, request, pk):
+        match = get_object_or_404(Match, pk=pk)
+        rating = get_object_or_404(Rating, user=request.user, match=match)
+
+        serializer = RatingMemoryUpdateSerializer(
+            rating,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        rating = serializer.save()
+
+        if rating.featured_primary_image == "stadium" and not rating.stadium_photo_url:
+            rating.featured_primary_image = "representative"
+            rating.save(update_fields=["featured_primary_image"])
+
+        return Response(RatingMemorySerializer(rating).data)

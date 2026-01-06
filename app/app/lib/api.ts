@@ -1,10 +1,13 @@
 // API helper: typed fetch wrapper with token auth, error handling, and core endpoints.
 import type {
   FeedResponse,
+  FeaturedPrimaryImage,
   MatchDetailResponse,
   ProfileActivityResponse,
   ProfileHighlightsResponse,
+  ProfileMemoriesResponse,
   ProfileResponse,
+  ProfileRatedResponse,
   ProfileStatsResponse,
   SearchResponse,
   Team,
@@ -272,6 +275,27 @@ export function fetchProfileHighlights(username: string, range: string) {
   );
 }
 
+// Profile memories (Mis partidos) endpoint.
+export function fetchProfileMemories(username: string) {
+  return authRequest<ProfileMemoriesResponse>(`/profile/${username}/memories`, {
+    method: 'GET',
+  });
+}
+
+// Profile rated matches for the selector modal.
+export function fetchProfileRatedMatches(username: string, q: string = '') {
+  const params = new URLSearchParams();
+  if (q) {
+    params.set('q', q);
+  }
+  const path = params.toString()
+    ? `/profile/${username}/ratings?${params.toString()}`
+    : `/profile/${username}/ratings`;
+  return authRequest<ProfileRatedResponse>(path, {
+    method: 'GET',
+  });
+}
+
 // Teams catalog endpoint with follow status when authenticated.
 export function fetchTeams() {
   return authRequest<TeamsResponse>('/teams', {
@@ -339,6 +363,14 @@ type RatePayload = {
   review: string;
 };
 
+type MatchMemoryPayload = {
+  attended?: boolean;
+  stadium_photo_url?: string;
+  representative_photo_url?: string;
+  featured_note?: string;
+  featured_primary_image?: FeaturedPrimaryImage;
+};
+
 // Create or update a rating for a match.
 export function rateMatch(
   matchId: number,
@@ -348,6 +380,56 @@ export function rateMatch(
   return authRequest(`/matches/${matchId}/rate`, {
     method,
     body: JSON.stringify(payload),
+  });
+}
+
+// Updates attendance/memory details for a match rating.
+export function updateMatchMemory(matchId: number, payload: MatchMemoryPayload) {
+  return authRequest(`/matches/${matchId}/memory`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Adds or replaces a featured match.
+export function addProfileMemory(
+  username: string,
+  matchId: number,
+  replaceMatchId?: number,
+) {
+  return authRequest<ProfileMemoriesResponse>(`/profile/${username}/memories`, {
+    method: 'POST',
+    body: JSON.stringify({
+      match_id: matchId,
+      replace_match_id: replaceMatchId,
+    }),
+  });
+}
+
+// Reorders featured matches by match id list.
+export function reorderProfileMemories(username: string, order: number[]) {
+  return authRequest<ProfileMemoriesResponse>(`/profile/${username}/memories`, {
+    method: 'PATCH',
+    body: JSON.stringify({ order }),
+  });
+}
+
+// Updates featured match metadata (note/image/primary image).
+export function updateProfileMemory(
+  username: string,
+  matchId: number,
+  payload: MatchMemoryPayload,
+) {
+  return authRequest<ProfileMemoriesResponse>(`/profile/${username}/memories`, {
+    method: 'PATCH',
+    body: JSON.stringify({ match_id: matchId, ...payload }),
+  });
+}
+
+// Removes a featured match.
+export function removeProfileMemory(username: string, matchId: number) {
+  return authRequest(`/profile/${username}/memories/${matchId}`, {
+    method: 'DELETE',
   });
 }
 

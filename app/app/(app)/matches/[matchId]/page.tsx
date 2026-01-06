@@ -9,6 +9,7 @@ import ReviewItem from '@/app/components/reviews/ReviewItem';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
+import MatchMemoryPanel from '@/app/components/match/MatchMemoryPanel';
 import { ApiError, fetchMatchDetail } from '@/app/lib/api';
 import { formatKickoff, getStatusMeta } from '@/app/lib/match-ui';
 import type { MatchDetailResponse } from '@/app/lib/types';
@@ -300,6 +301,13 @@ export default function Page({ params }: MatchPageProps) {
           </div>
         </div>
       </div>
+
+      <MatchMemoryPanel
+        matchId={match.id}
+        rating={my_rating}
+        onRequireRating={() => openRateModal()}
+        onUpdated={loadMatch}
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         {[

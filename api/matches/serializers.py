@@ -113,6 +113,27 @@ class RatingSerializer(serializers.ModelSerializer):
         ]
 
 
+class RatingMemorySerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+
+    class Meta:
+        model = Rating
+        fields = [
+            "id",
+            "user",
+            "score",
+            "minutes_watched",
+            "review",
+            "attended",
+            "stadium_photo_url",
+            "representative_photo_url",
+            "featured_note",
+            "featured_order",
+            "featured_primary_image",
+            "created_at",
+        ]
+
+
 class RatingWithMatchSerializer(serializers.ModelSerializer):
     user = UserMiniSerializer(read_only=True)
     match = MatchSerializer(read_only=True)
@@ -126,6 +147,12 @@ class RatingWithMatchSerializer(serializers.ModelSerializer):
             "score",
             "minutes_watched",
             "review",
+            "attended",
+            "stadium_photo_url",
+            "representative_photo_url",
+            "featured_note",
+            "featured_order",
+            "featured_primary_image",
             "created_at",
         ]
 
@@ -134,6 +161,18 @@ class RatingUpsertSerializer(serializers.ModelSerializer):
     class Meta:
         model = Rating
         fields = ["score", "minutes_watched", "review"]
+
+
+class RatingMemoryUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Rating
+        fields = [
+            "attended",
+            "stadium_photo_url",
+            "representative_photo_url",
+            "featured_note",
+            "featured_primary_image",
+        ]
 
 
 class FeedMatchSerializer(serializers.ModelSerializer):
@@ -191,7 +230,7 @@ class MatchDetailResponseSerializer(serializers.Serializer):
     full_watched_pct = serializers.FloatField()
     featured_reviews = RatingSerializer(many=True)
     followed_ratings = RatingSerializer(many=True)
-    my_rating = RatingSerializer(allow_null=True)
+    my_rating = RatingMemorySerializer(allow_null=True)
 
 
 class SearchMatchSerializer(serializers.ModelSerializer):

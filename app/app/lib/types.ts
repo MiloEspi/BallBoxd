@@ -4,6 +4,8 @@ export type UserMini = {
   username: string;
 };
 
+export type FeaturedPrimaryImage = 'representative' | 'stadium';
+
 export type Team = {
   id: number;
   name: string;
@@ -36,6 +38,12 @@ export type Rating = {
   score: number;
   minutes_watched: string;
   review: string;
+  attended?: boolean;
+  stadium_photo_url?: string | null;
+  representative_photo_url?: string | null;
+  featured_note?: string;
+  featured_order?: number | null;
+  featured_primary_image?: FeaturedPrimaryImage;
   created_at: string;
 };
 
@@ -169,4 +177,15 @@ export type ProfileHighlightsResponse = {
   range: string;
   top_rated: RatingWithMatch[];
   low_rated: RatingWithMatch[];
+};
+
+export type ProfileMemoriesResponse = {
+  user: UserMini;
+  max_count: number;
+  results: RatingWithMatch[];
+};
+
+export type ProfileRatedResponse = {
+  user: UserMini;
+  results: RatingWithMatch[];
 };
