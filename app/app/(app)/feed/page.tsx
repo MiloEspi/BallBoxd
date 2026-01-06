@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import FeedMatchCard from '@/app/components/match/FeedMatchCard';
+import MatchCard from '@/app/components/match/MatchCard';
+import RateMatchModal from '@/app/components/match/RateMatchModal';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
+import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import { ApiError, fetchFeed } from '@/app/lib/api';
 import {
   getCenteredWindowDays,
@@ -37,6 +39,11 @@ export default function Page() {
   const [selectedDay, setSelectedDay] = useState<Date>(() => today);
   const [transitionPhase, setTransitionPhase] =
     useState<TransitionPhase>('idle');
+  const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+  const [modalOrigin, setModalOrigin] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Loads the feed data from the API and updates UI state.
   const loadFeed = async () => {
@@ -170,19 +177,9 @@ export default function Page() {
       </header>
 
       {loading && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={`feed-skeleton-${index}`}
-              className="rounded-2xl border border-white/10 bg-white/5 p-4"
-            >
-              <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
-              <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/10" />
-              <div className="mt-4 space-y-2">
-                <div className="h-10 animate-pulse rounded bg-white/10" />
-                <div className="h-10 animate-pulse rounded bg-white/10" />
-              </div>
-            </div>
+            <SkeletonMatchCard key={`feed-skeleton-${index}`} />
           ))}
         </div>
       )}
@@ -293,17 +290,39 @@ export default function Page() {
                 </span>
               </div>
               <div
-                className={`grid gap-4 md:grid-cols-2 transition-opacity duration-200 ${
+                className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 transition-opacity duration-200 ${
                   transitionPhase === 'fadeOut' ? 'opacity-0' : 'opacity-100'
                 }`}
               >
                 {sortedMatches.map((match) => (
-                  <FeedMatchCard key={match.id} match={match} />
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    onRate={(selected, origin) => {
+                      setActiveMatch(selected);
+                      setModalOrigin(origin ?? null);
+                    }}
+                  />
                 ))}
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {activeMatch && (
+        <RateMatchModal
+          matchId={activeMatch.id}
+          initialScore={activeMatch.my_rating?.score}
+          initialMinutesWatched={activeMatch.my_rating?.minutes_watched}
+          initialReview={activeMatch.my_rating?.review}
+          origin={modalOrigin}
+          onClose={() => {
+            setActiveMatch(null);
+            setModalOrigin(null);
+          }}
+          onSaved={loadFeed}
+        />
       )}
     </section>
   );
