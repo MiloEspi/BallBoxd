@@ -8,6 +8,12 @@ import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import { fetchMatches, fetchTeams, followTeam, unfollowTeam } from '@/app/lib/api';
 import type { Match, Team } from '@/app/lib/types';
 
+type LeagueOption = {
+  value: string;
+  label: string;
+  subtitle?: string;
+};
+
 const getDateRange = () => {
   const end = new Date();
   const start = new Date();
@@ -114,7 +120,7 @@ export default function Page() {
   const teamLeagueMap = useMemo(() => buildTeamLeagueMap(matches), [matches]);
   const hasOtherTeams = teams.some((team) => !teamLeagueMap.has(team.id));
 
-  const leagueDropdownOptions = useMemo(() => {
+  const leagueDropdownOptions = useMemo<LeagueOption[]>(() => {
     const options = [
       { value: 'ALL', label: 'All leagues' },
       ...leagueOptions.map((league) => ({
