@@ -36,6 +36,9 @@ ALLOWED_HOSTS = [
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # Application definition
@@ -171,6 +174,9 @@ FOOTBALL_DATA_RATE_LIMIT_WINDOW_SECONDS = int(
     os.getenv("FOOTBALL_DATA_RATE_LIMIT_WINDOW_SECONDS", "60")
 )
 FOOTBALL_DATA_CACHE_SECONDS = int(os.getenv("FOOTBALL_DATA_CACHE_SECONDS", "600"))
+FOOTBALL_DATA_MATCHES_MAX_RANGE_DAYS = int(
+    os.getenv("FOOTBALL_DATA_MATCHES_MAX_RANGE_DAYS", "10")
+)
 IMPORT_MATCHES_RANGE_DAYS = int(os.getenv("IMPORT_MATCHES_RANGE_DAYS", "0"))
 IMPORT_MATCHES_FREQUENCY_MINUTES = int(
     os.getenv("IMPORT_MATCHES_FREQUENCY_MINUTES", "10")
@@ -184,4 +190,4 @@ IMPORT_MATCHES_WEEKEND_MINUTES = int(
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Shared secret for protected internal cron endpoints (/internal/*).
-CRON_SECRET = os.getenv("CRON_SECRET", "")
+CRON_SECRET = os.getenv("CRON_SECRET", "") or os.getenv("CRON-SECRET", "")

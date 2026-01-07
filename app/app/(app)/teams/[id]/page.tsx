@@ -3,7 +3,8 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 
-import MatchResultCard from '@/app/components/search/MatchResultCard';
+import MatchCard from '@/app/components/match/MatchCard';
+import RateMatchModal from '@/app/components/match/RateMatchModal';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
@@ -14,7 +15,7 @@ import {
   followTeam,
   unfollowTeam,
 } from '@/app/lib/api';
-import type { MatchResult, Team } from '@/app/lib/types';
+import type { Match, Team } from '@/app/lib/types';
 
 type TeamPageProps = {
   params: Promise<{ id: string }>;
@@ -36,12 +37,61 @@ export default function Page({ params }: TeamPageProps) {
   const { id } = use(params);
   const teamId = Number(id);
   const [team, setTeam] = useState<Team | null>(null);
-  const [matches, setMatches] = useState<MatchResult[]>([]);
-  const [scope, setScope] = useState<'recent' | 'upcoming' | 'all'>('recent');
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [scope, setScope] = useState<'recent' | 'upcoming' | 'all'>('upcoming');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
   const [pendingFollow, setPendingFollow] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+  const [modalOrigin, setModalOrigin] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const sortTeamMatches = (
+    list: Match[],
+    mode: 'recent' | 'upcoming' | 'all',
+  ) => {
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      const leftDate = new Date(a.date_time);
+      const rightDate = new Date(b.date_time);
+      const now = Date.now();
+      const leftDay = new Date(
+        leftDate.getFullYear(),
+        leftDate.getMonth(),
+        leftDate.getDate(),
+      ).getTime();
+      const rightDay = new Date(
+        rightDate.getFullYear(),
+        rightDate.getMonth(),
+        rightDate.getDate(),
+      ).getTime();
+      if (mode === 'upcoming') {
+        return leftDate.getTime() - rightDate.getTime();
+      }
+      if (mode === 'all') {
+        const leftUpcoming = leftDate.getTime() >= now;
+        const rightUpcoming = rightDate.getTime() >= now;
+        if (leftUpcoming !== rightUpcoming) {
+          return leftUpcoming ? -1 : 1;
+        }
+        if (leftUpcoming) {
+          return leftDate.getTime() - rightDate.getTime();
+        }
+        if (leftDay !== rightDay) {
+          return rightDay - leftDay;
+        }
+        return leftDate.getTime() - rightDate.getTime();
+      }
+      if (leftDay !== rightDay) {
+        return rightDay - leftDay;
+      }
+      return leftDate.getTime() - rightDate.getTime();
+    });
+    return sorted;
+  };
 
   const resolveError = (err: unknown): ErrorState => {
     if (err instanceof ApiError && err.status === 401) {
@@ -68,7 +118,7 @@ export default function Page({ params }: TeamPageProps) {
       const response = await fetchTeamDetail(teamId);
       setTeam(response);
       const matchesResponse = await fetchTeamMatches(teamId, { scope });
-      setMatches(matchesResponse.results);
+      setMatches(sortTeamMatches(matchesResponse.results, scope));
     } catch (err) {
       setError(resolveError(err));
     } finally {
@@ -215,9 +265,16 @@ export default function Page({ params }: TeamPageProps) {
       {matches.length === 0 ? (
         <StateEmpty title="No hay partidos para este equipo." />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {matches.map((match) => (
-            <MatchResultCard key={match.id} match={match} />
+            <MatchCard
+              key={match.id}
+              match={match}
+              onRate={(selected, origin) => {
+                setActiveMatch(selected);
+                setModalOrigin(origin ?? null);
+              }}
+            />
           ))}
         </div>
       )}
@@ -226,6 +283,21 @@ export default function Page({ params }: TeamPageProps) {
         <div className="fixed bottom-6 right-6 z-50 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_20px_45px_rgba(0,0,0,0.45)] backdrop-blur">
           {toastMessage}
         </div>
+      )}
+
+      {activeMatch && (
+        <RateMatchModal
+          matchId={activeMatch.id}
+          initialScore={activeMatch.my_rating?.score}
+          initialMinutesWatched={activeMatch.my_rating?.minutes_watched}
+          initialReview={activeMatch.my_rating?.review}
+          origin={modalOrigin}
+          onClose={() => {
+            setActiveMatch(null);
+            setModalOrigin(null);
+          }}
+          onSaved={loadTeam}
+        />
       )}
     </section>
   );

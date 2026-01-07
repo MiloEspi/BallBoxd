@@ -2,6 +2,7 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 
+from matches.services.football_data import FootballDataError
 from matches.services.importers import get_import_frequency_minutes
 from matches.services.jobs import poll_matches_once
 
@@ -36,7 +37,16 @@ class Command(BaseCommand):
 
         while True:
             interval_minutes = interval if interval is not None else get_import_frequency_minutes()
-            result = poll_matches_once(interval_minutes=interval_minutes, use_cache=use_cache)
+            try:
+                result = poll_matches_once(interval_minutes=interval_minutes, use_cache=use_cache)
+            except FootballDataError as exc:
+                self.stderr.write(self.style.ERROR(f"Poll failed: {exc}"))
+                if run_once:
+                    raise CommandError(str(exc)) from exc
+                if interval_minutes <= 0:
+                    break
+                time.sleep(interval_minutes * 60)
+                continue
             if result.skipped:
                 self.stdout.write("Skipping poll; last run within interval.")
             else:

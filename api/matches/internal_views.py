@@ -1,15 +1,17 @@
 import hmac
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.core.cache import cache
 from django.http import JsonResponse
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from matches.services.football_data import FootballDataError
 from matches.services.jobs import import_fixtures_once, poll_matches_once
 
 logger = logging.getLogger(__name__)
@@ -88,10 +90,20 @@ def _parse_date_param(value) -> date | None:
     return parse_date(str(value))
 
 
+def _parse_int_param(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @csrf_exempt
 @require_POST
 def import_fixtures_view(request):
     if not _is_authorized(request):
+        logger.warning("Internal import-fixtures unauthorized ip=%s", _get_client_ip(request))
         return _unauthorized()
     if not _rate_limit_ip(request, key_prefix="internal:import-fixtures"):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
@@ -119,16 +131,58 @@ def import_fixtures_view(request):
         or request.GET.get("to")
         or request.GET.get("date_to")
     )
+    days_ahead = _parse_int_param(
+        body.get("days_ahead")
+        or request.POST.get("days_ahead")
+        or request.GET.get("days_ahead")
+    )
+    days_back = _parse_int_param(
+        body.get("days_back")
+        or request.POST.get("days_back")
+        or request.GET.get("days_back")
+    )
+
+    used_date_from = date_from
+    used_date_to = date_to
+    if used_date_from is None and used_date_to is None and (days_ahead is not None or days_back is not None):
+        today = timezone.now().date()
+        used_date_from = today - timedelta(days=max(0, int(days_back or 0)))
+        used_date_to = today + timedelta(days=max(0, int(days_ahead or 0)))
 
     logger.info(
-        "Internal import-fixtures start leagues=%s from=%s to=%s ip=%s",
+        "Internal import-fixtures start leagues=%s from=%s to=%s days_ahead=%s days_back=%s ip=%s",
         leagues,
-        date_from,
-        date_to,
+        used_date_from,
+        used_date_to,
+        days_ahead,
+        days_back,
         _get_client_ip(request),
     )
     try:
-        result = import_fixtures_once(leagues=leagues, date_from=date_from, date_to=date_to)
+        result = import_fixtures_once(
+            leagues=leagues,
+            date_from=used_date_from,
+            date_to=used_date_to,
+            days_ahead=days_ahead,
+            days_back=days_back,
+        )
+    except FootballDataError as exc:
+        logger.error(
+            "Internal import-fixtures football-data error status=%s endpoint=%s detail=%s",
+            exc.status_code,
+            exc.endpoint,
+            exc,
+        )
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "football_data_error",
+                "status_code": exc.status_code,
+                "endpoint": exc.endpoint,
+                "detail": str(exc),
+            },
+            status=502,
+        )
     except Exception:
         logger.exception("Internal import-fixtures failed.")
         return JsonResponse({"ok": False, "error": "internal_error"}, status=500)
@@ -149,6 +203,9 @@ def import_fixtures_view(request):
             "competitions": result.competitions,
             "teams": result.teams,
             "matches_seen": result.matches,
+            "api_calls_used": result.api_calls_used,
+            "date_from": used_date_from.isoformat() if used_date_from else None,
+            "date_to": used_date_to.isoformat() if used_date_to else None,
         }
     )
 
@@ -157,6 +214,7 @@ def import_fixtures_view(request):
 @require_POST
 def poll_matches_view(request):
     if not _is_authorized(request):
+        logger.warning("Internal poll-matches unauthorized ip=%s", _get_client_ip(request))
         return _unauthorized()
     if not _rate_limit_ip(request, key_prefix="internal:poll-matches"):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
@@ -164,6 +222,23 @@ def poll_matches_view(request):
     logger.info("Internal poll-matches start ip=%s", _get_client_ip(request))
     try:
         result = poll_matches_once()
+    except FootballDataError as exc:
+        logger.error(
+            "Internal poll-matches football-data error status=%s endpoint=%s detail=%s",
+            exc.status_code,
+            exc.endpoint,
+            exc,
+        )
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "football_data_error",
+                "status_code": exc.status_code,
+                "endpoint": exc.endpoint,
+                "detail": str(exc),
+            },
+            status=502,
+        )
     except Exception:
         logger.exception("Internal poll-matches failed.")
         return JsonResponse({"ok": False, "error": "internal_error"}, status=500)
@@ -180,6 +255,8 @@ def poll_matches_view(request):
                 "reason": result.reason,
                 "last_run_seconds_ago": result.last_run_seconds_ago,
                 "updated_matches": 0,
+                "created_matches": 0,
+                "matches_seen": 0,
                 "api_calls_used": 0,
                 "duration_seconds": round(result.duration_seconds, 3),
             }
@@ -198,6 +275,10 @@ def poll_matches_view(request):
             "ok": True,
             "skipped": False,
             "updated_matches": result.updated_matches,
+            "created_matches": result.created_matches,
+            "matches_seen": result.matches_seen,
+            "competitions": result.competitions,
+            "teams": result.teams,
             "api_calls_used": result.api_calls_used,
             "duration_seconds": round(result.duration_seconds, 3),
         }

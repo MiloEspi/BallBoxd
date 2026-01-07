@@ -39,6 +39,7 @@ Optional tuning:
 FOOTBALL_DATA_RATE_LIMIT_PER_MINUTE=10
 FOOTBALL_DATA_RATE_LIMIT_WINDOW_SECONDS=60
 FOOTBALL_DATA_CACHE_SECONDS=600
+FOOTBALL_DATA_MATCHES_MAX_RANGE_DAYS=10
 IMPORT_MATCHES_RANGE_DAYS=0
 IMPORT_MATCHES_FREQUENCY_MINUTES=10
 IMPORT_MATCHES_WEEKDAY_MINUTES=10
@@ -69,6 +70,11 @@ Set an env var on Render:
 ```
 CRON_SECRET=<long_random_secret>
 ```
+Important: the key is `CRON_SECRET` (underscore). If you accidentally set `CRON-SECRET` (dash), rename it.
+Also ensure your Render hostname is allowed by Django (either set `ALLOWED_HOSTS`, or rely on Render’s `RENDER_EXTERNAL_HOSTNAME`):
+```
+ALLOWED_HOSTS=ballboxd.onrender.com
+```
 
 Create a cron-job.org job:
 - Method: `POST`
@@ -86,9 +92,19 @@ Manual test (fixtures import/backfill):
 curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures" \
   -H "X-CRON-TOKEN: <CRON_SECRET>"
 ```
+Import next 30 days (good for a daily cron):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?days_ahead=30" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
 Optional params for fixtures import:
 ```bash
-curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?leagues=39,140&from=2024-01-01&to=2024-01-31" \
+curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?from=2024-01-01&to=2024-01-31" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
+Filter by football-data competition ids (optional, examples: `2021`=PL, `2014`=La Liga):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?leagues=2021,2014&from=2024-01-01&to=2024-01-31" \
   -H "X-CRON-TOKEN: <CRON_SECRET>"
 ```
 

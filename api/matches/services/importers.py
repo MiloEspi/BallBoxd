@@ -50,12 +50,14 @@ def get_import_frequency_minutes(now=None):
     return weekend_default if now.weekday() >= 5 else weekday_default
 
 
-def import_competitions_tier_one(competition_ids=None, codes=None, client=None):
+def import_competitions_tier_one(competition_ids=None, codes=None, client=None, *, raise_on_error: bool = False):
     try:
         client = client or FootballDataClient()
         payload = _run_async(client.get_competitions_tier_one())
     except FootballDataError as exc:
         logger.error("Competition import failed: %s", exc)
+        if raise_on_error:
+            raise
         return ImportSummary()
 
     items = payload.get("competitions", [])
@@ -74,7 +76,7 @@ def import_competitions_tier_one(competition_ids=None, codes=None, client=None):
     return ImportSummary(competitions=len(competitions))
 
 
-def import_matches_global(date_from, date_to, competition_ids=None, client=None):
+def import_matches_global(date_from, date_to, competition_ids=None, client=None, *, raise_on_error: bool = False):
     date_from_str = _format_date(date_from)
     date_to_str = _format_date(date_to)
     try:
@@ -82,6 +84,8 @@ def import_matches_global(date_from, date_to, competition_ids=None, client=None)
         payload = _run_async(client.get_matches_global(date_from_str, date_to_str))
     except FootballDataError as exc:
         logger.error("Global match import failed: %s", exc)
+        if raise_on_error:
+            raise
         return ImportSummary()
 
     matches = payload.get("matches", [])
@@ -138,6 +142,62 @@ def import_matches_global(date_from, date_to, competition_ids=None, client=None)
         updated_matches=updated_matches,
         skipped_matches=skipped_matches,
     )
+
+
+def import_matches_global_batched(
+    date_from,
+    date_to,
+    competition_ids=None,
+    client=None,
+    *,
+    raise_on_error: bool = False,
+    max_range_days: int | None = None,
+):
+    try:
+        start = _coerce_date(date_from)
+        end = _coerce_date(date_to)
+    except (TypeError, ValueError):
+        return import_matches_global(
+            date_from,
+            date_to,
+            competition_ids=competition_ids,
+            client=client,
+            raise_on_error=raise_on_error,
+        )
+
+    if start is None or end is None or start > end:
+        return ImportSummary()
+
+    max_days = int(
+        max_range_days
+        if max_range_days is not None
+        else getattr(settings, "FOOTBALL_DATA_MATCHES_MAX_RANGE_DAYS", 10)
+    )
+    if max_days <= 0:
+        max_days = 10
+
+    total = ImportSummary()
+    window_start = start
+    while window_start <= end:
+        window_end = min(window_start + timedelta(days=max_days - 1), end)
+        summary = import_matches_global(
+            window_start,
+            window_end,
+            competition_ids=competition_ids,
+            client=client,
+            raise_on_error=raise_on_error,
+        )
+        total = ImportSummary(
+            competitions=total.competitions + summary.competitions,
+            teams=total.teams + summary.teams,
+            matches=total.matches + summary.matches,
+            created_matches=total.created_matches + summary.created_matches,
+            updated_matches=total.updated_matches + summary.updated_matches,
+            skipped_matches=total.skipped_matches + summary.skipped_matches,
+        )
+        window_start = window_end + timedelta(days=1)
+
+    return total
 
 
 def upsert_competition_from_api(competition):
@@ -336,6 +396,16 @@ def _format_date(value):
     if isinstance(value, date):
         return value.isoformat()
     return value
+
+
+def _coerce_date(value):
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    if hasattr(value, "date"):
+        return value.date()
+    return date.fromisoformat(str(value))
 
 
 async def _await_coro(coro):

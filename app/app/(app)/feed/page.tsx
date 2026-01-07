@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CalendarIcon } from '@heroicons/react/24/outline';
 
 import MatchCard from '@/app/components/match/MatchCard';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
+import CalendarModal from '@/app/components/ui/CalendarModal';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import { ApiError, fetchFeed } from '@/app/lib/api';
 import {
+  addDays,
   getCenteredWindowDays,
   getDateKey,
   getRelativeDayLabel,
@@ -37,6 +40,7 @@ export default function Page() {
   const [selectedRating, setSelectedRating] = useState('ALL');
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDay, setSelectedDay] = useState<Date>(() => today);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [transitionPhase, setTransitionPhase] =
     useState<TransitionPhase>('idle');
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
@@ -44,6 +48,7 @@ export default function Page() {
     x: number;
     y: number;
   } | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Loads the feed data from the API and updates UI state.
   const loadFeed = async () => {
@@ -94,6 +99,7 @@ export default function Page() {
   ];
   const ratingOptions = [
     { value: 'ALL', label: 'All' },
+    { value: 'RATED', label: 'Rated' },
     { value: 'UNRATED', label: 'Unrated' },
   ];
 
@@ -104,6 +110,9 @@ export default function Page() {
         return false;
       }
       if (selectedRating === 'UNRATED' && match.my_rating) {
+        return false;
+      }
+      if (selectedRating === 'RATED' && !match.my_rating) {
         return false;
       }
       return true;
@@ -128,7 +137,10 @@ export default function Page() {
     );
   }, [dayMatches]);
 
-  const stripDays = useMemo(() => getCenteredWindowDays(today, 3), [today]);
+  const stripDays = useMemo(
+    () => getCenteredWindowDays(selectedDay, 3),
+    [selectedDay],
+  );
 
   const stripCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -167,9 +179,22 @@ export default function Page() {
       ? '1 match'
       : `${sortedMatches.length} matches`;
 
+  const statusLabel =
+    selectedStatus === 'ALL'
+      ? 'All'
+      : selectedStatus === 'LIVE'
+        ? 'Live'
+        : 'Finished';
+  const ratingLabel =
+    selectedRating === 'ALL'
+      ? 'All'
+      : selectedRating === 'UNRATED'
+        ? 'Unrated'
+        : 'Rated';
+
   return (
     <section className="space-y-6">
-      <header className="space-y-2">
+      <header className="hidden space-y-2 md:block">
         <h1 className="text-2xl font-semibold">Feed</h1>
         <p className="text-sm text-slate-400">
           Matches that matter to you today and recently.
@@ -206,8 +231,8 @@ export default function Page() {
 
       {!loading && !error && matches.length > 0 && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+            <div className="hidden flex-wrap items-center gap-3 md:flex">
               <SegmentedControl
                 options={statusOptions}
                 value={selectedStatus}
@@ -223,45 +248,112 @@ export default function Page() {
                 size="sm"
               />
             </div>
-            <div className="mt-4 flex items-center justify-center gap-2 overflow-x-auto pb-1">
-              {stripDays.map((day) => {
-                const key = getDateKey(day);
-                const isSelected = isSameDay(day, selectedDay);
-                const isToday = isSameDay(day, today);
-                const count = stripCounts.get(key) ?? 0;
-                const dayLabel = getRelativeDayLabel(day, today);
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    aria-pressed={isSelected}
-                    className={`min-w-[68px] rounded-2xl border px-3 py-2 text-left text-xs transition-all duration-200 ${
-                      isSelected
-                        ? 'border-white/30 bg-white/15 text-white shadow-[0_10px_25px_rgba(0,0,0,0.2)]'
-                        : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10'
-                    } ${isToday ? 'ring-1 ring-emerald-300/50' : ''}`}
-                    onClick={() => setSelectedDay(startOfDay(day))}
-                  >
-                    <div
-                      className={`flex items-center justify-between text-[11px] font-semibold ${
-                        isSelected ? 'text-white' : 'text-slate-300'
-                      }`}
-                    >
-                      <span>{dayLabel}</span>
-                      {count > 0 && (
-                        <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
-                      )}
-                    </div>
-                    <div
-                      className={`mt-1 text-base font-semibold ${
-                        isSelected ? 'text-white' : 'text-slate-100'
-                      }`}
-                    >
-                      {day.getDate()}
-                    </div>
-                  </button>
-                );
-              })}
+
+            <div className="md:hidden">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                  {statusLabel} · {ratingLabel}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
+                  onClick={() => setFiltersExpanded((prev) => !prev)}
+                  aria-expanded={filtersExpanded}
+                >
+                  {filtersExpanded ? 'Less' : 'Filters'}
+                </button>
+              </div>
+
+              {filtersExpanded && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <SegmentedControl
+                    options={statusOptions}
+                    value={selectedStatus}
+                    onChange={setSelectedStatus}
+                    ariaLabel="Filtrar por estado"
+                    size="sm"
+                  />
+                  <SegmentedControl
+                    options={ratingOptions}
+                    value={selectedRating}
+                    onChange={setSelectedRating}
+                    ariaLabel="Filtrar por rating"
+                    size="sm"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Dia anterior"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
+                onClick={() => setSelectedDay(startOfDay(addDays(selectedDay, -1)))}
+              >
+                {'<'}
+              </button>
+
+              <div className="min-w-0 flex-1">
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {stripDays.map((day) => {
+                    const key = getDateKey(day);
+                    const isSelected = isSameDay(day, selectedDay);
+                    const isToday = isSameDay(day, today);
+                    const count = stripCounts.get(key) ?? 0;
+                    const dayLabel = getRelativeDayLabel(day, today);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={`w-full rounded-2xl border px-2 py-2 text-left text-xs transition-all duration-200 ${
+                          isSelected
+                            ? 'border-white/30 bg-white/15 text-white shadow-[0_10px_25px_rgba(0,0,0,0.2)]'
+                            : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10'
+                        } ${isToday ? 'ring-1 ring-emerald-300/50' : ''}`}
+                        onClick={() => setSelectedDay(startOfDay(day))}
+                      >
+                        <div
+                          className={`flex items-center justify-between text-[11px] font-semibold ${
+                            isSelected ? 'text-white' : 'text-slate-300'
+                          }`}
+                        >
+                          <span>{dayLabel}</span>
+                          {count > 0 && (
+                            <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
+                          )}
+                        </div>
+                        <div
+                          className={`mt-1 text-base font-semibold ${
+                            isSelected ? 'text-white' : 'text-slate-100'
+                          }`}
+                        >
+                          {day.getDate()}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Dia siguiente"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
+                onClick={() => setSelectedDay(startOfDay(addDays(selectedDay, 1)))}
+              >
+                {'>'}
+              </button>
+
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
+                onClick={() => setCalendarOpen(true)}
+                aria-label="Abrir calendario"
+              >
+                <CalendarIcon className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
@@ -280,7 +372,7 @@ export default function Page() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-lg font-semibold text-white">
+                  <p className="text-base font-semibold text-white sm:text-lg">
                     {selectedDayLabel}
                   </p>
                   <p className="text-xs text-slate-400">{selectedDayFull}</p>
@@ -324,6 +416,15 @@ export default function Page() {
           onSaved={loadFeed}
         />
       )}
+
+      <CalendarModal
+        open={calendarOpen}
+        selected={selectedDay}
+        onSelect={(date) => {
+          setSelectedDay(date);
+        }}
+        onClose={() => setCalendarOpen(false)}
+      />
     </section>
   );
 }

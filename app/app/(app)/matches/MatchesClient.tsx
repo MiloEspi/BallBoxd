@@ -4,32 +4,29 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import MatchCard from '@/app/components/match/MatchCard';
+import MatchesToolbar from '@/app/components/match/MatchesToolbar';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
-import LeagueSelect from '@/app/components/ui/LeagueSelect';
+import CalendarModal from '@/app/components/ui/CalendarModal';
 import PaginationControls from '@/app/components/ui/PaginationControls';
 import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import { fetchMatches } from '@/app/lib/api';
+import {
+  addDays,
+  isSameDay,
+  startOfDay,
+} from '@/app/lib/date-range';
 import { readLeaguePreferences, saveLeaguePreferences } from '@/app/lib/league-preferences';
 import { getStatusMeta } from '@/app/lib/match-ui';
 import type { Match } from '@/app/lib/types';
-import SegmentedControl from '@/app/ui/segmented-control';
 
 // Formats the date label for the calendar pill.
 const formatDateLabel = (date: Date) => {
   return date.toLocaleDateString('es-ES', {
     day: 'numeric',
     month: 'short',
+    year: 'numeric',
   });
-};
-
-// Checks if two dates fall on the same calendar day.
-const isSameDay = (left: Date, right: Date) => {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
 };
 
 // Extracts a sorted list of unique leagues by id.
@@ -49,12 +46,6 @@ const getLeagueOptions = (matches: Match[]) => {
   );
 };
 
-// Picks the most recent match date to seed the calendar.
-const getLatestMatchDate = (matches: Match[]) => {
-  const dates = matches.map((match) => new Date(match.date_time));
-  return dates.sort((a, b) => b.getTime() - a.getTime())[0] ?? new Date();
-};
-
 // Matches listing page with date + league filters.
 export default function MatchesClient() {
   const searchParams = useSearchParams();
@@ -70,15 +61,17 @@ export default function MatchesClient() {
   >('idle');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [hasStoredPrefs, setHasStoredPrefs] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => today);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
-  const [sortBy, setSortBy] = useState('date_desc');
+  const [sortBy, setSortBy] = useState('date_asc');
   const [page, setPage] = useState(1);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
   const [modalOrigin, setModalOrigin] = useState<{
     x: number;
     y: number;
   } | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const pageSize = 8;
 
   // Loads the full matches catalog.
@@ -117,15 +110,9 @@ export default function MatchesClient() {
     const tournamentId = Number(tournamentParam);
     if (!Number.isNaN(tournamentId)) {
       setSelectedLeague(String(tournamentId));
-      setSelectedDate(null);
+      setSelectedDate(today);
     }
   }, [matches, tournamentParam]);
-
-  useEffect(() => {
-    if (!selectedDate && matches.length > 0) {
-      setSelectedDate(getLatestMatchDate(matches));
-    }
-  }, [matches, selectedDate]);
 
   useEffect(() => {
     setTransitionPhase('fadeOut');
@@ -187,9 +174,7 @@ export default function MatchesClient() {
         selectedLeague === 'ALL' ||
         (selectedLeague === 'MY' && myLeagues.includes(match.tournament.id)) ||
         String(match.tournament.id) === selectedLeague;
-      const byDate =
-        !selectedDate ||
-        isSameDay(new Date(match.date_time), selectedDate);
+      const byDate = isSameDay(new Date(match.date_time), selectedDate);
       const byStatus =
         selectedStatus === 'ALL' ||
         getStatusMeta(match.status, match.date_time).label === selectedStatus;
@@ -204,15 +189,43 @@ export default function MatchesClient() {
     } else if (sortBy === 'rating_asc') {
       list.sort((a, b) => (a.avg_score ?? 0) - (b.avg_score ?? 0));
     } else if (sortBy === 'date_asc') {
-      list.sort(
-        (a, b) =>
-          new Date(a.date_time).getTime() - new Date(b.date_time).getTime(),
-      );
+      list.sort((a, b) => {
+        const leftDate = new Date(a.date_time);
+        const rightDate = new Date(b.date_time);
+        const leftDay = new Date(
+          leftDate.getFullYear(),
+          leftDate.getMonth(),
+          leftDate.getDate(),
+        ).getTime();
+        const rightDay = new Date(
+          rightDate.getFullYear(),
+          rightDate.getMonth(),
+          rightDate.getDate(),
+        ).getTime();
+        if (leftDay !== rightDay) {
+          return leftDay - rightDay;
+        }
+        return leftDate.getTime() - rightDate.getTime();
+      });
     } else {
-      list.sort(
-        (a, b) =>
-          new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
-      );
+      list.sort((a, b) => {
+        const leftDate = new Date(a.date_time);
+        const rightDate = new Date(b.date_time);
+        const leftDay = new Date(
+          leftDate.getFullYear(),
+          leftDate.getMonth(),
+          leftDate.getDate(),
+        ).getTime();
+        const rightDay = new Date(
+          rightDate.getFullYear(),
+          rightDate.getMonth(),
+          rightDate.getDate(),
+        ).getTime();
+        if (leftDay !== rightDay) {
+          return rightDay - leftDay;
+        }
+        return leftDate.getTime() - rightDate.getTime();
+      });
     }
     return list;
   }, [filteredMatches, sortBy]);
@@ -228,136 +241,46 @@ export default function MatchesClient() {
     currentPage * pageSize,
   );
 
-  const today = new Date();
-  const calendarLabel = selectedDate
-    ? isSameDay(selectedDate, today)
-      ? 'Hoy'
-      : formatDateLabel(selectedDate)
-    : 'Todas';
-  const showingLabel = selectedDate
-    ? `Showing: ${selectedDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })}`
-    : 'Showing: All dates';
+  const selectedLeagueLabel =
+    leagueDropdownOptions.find((option) => option.value === selectedLeague)
+      ?.label ?? 'All leagues';
+  const selectedStatusLabel =
+    selectedStatus === 'ALL'
+      ? 'Todo'
+      : selectedStatus === 'LIVE'
+        ? 'Live'
+        : selectedStatus === 'FINISHED'
+          ? 'Finished'
+          : 'Upcoming';
+  const showingLabel = `${formatDateLabel(selectedDate)} · ${selectedLeagueLabel} · ${selectedStatusLabel}`;
 
   return (
-    <section className="space-y-8">
-      <header className="space-y-2">
+    <section className="space-y-6">
+      <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Partidos</h1>
-        <p className="text-sm text-slate-400">
-          Filtra por fecha y liga para explorar partidos cargados.
-        </p>
+        <p className="text-sm text-slate-400">Explorá partidos por fecha y liga.</p>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 shadow-[inset_0_0_25px_rgba(255,255,255,0.06)] backdrop-blur-xl">
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
-            onClick={() => {
-              if (!selectedDate) {
-                setSelectedDate(today);
-                return;
-              }
-              const prev = new Date(selectedDate);
-              prev.setDate(prev.getDate() - 1);
-              setSelectedDate(prev);
-            }}
-          >
-            {'<'}
-          </button>
-          <div className="min-w-[90px] text-center text-sm font-semibold text-slate-100">
-            {calendarLabel}
-          </div>
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
-            onClick={() => {
-              if (!selectedDate) {
-                setSelectedDate(today);
-                return;
-              }
-              const next = new Date(selectedDate);
-              next.setDate(next.getDate() + 1);
-              setSelectedDate(next);
-            }}
-          >
-            {'>'}
-          </button>
-        </div>
+      <MatchesToolbar
+        selectedDate={selectedDate}
+        today={today}
+        selectedLeague={selectedLeague}
+        selectedStatus={selectedStatus}
+        sortBy={sortBy}
+        leagueDropdownOptions={leagueDropdownOptions}
+        onPrevDay={() => setSelectedDate(startOfDay(addDays(selectedDate, -1)))}
+        onNextDay={() => setSelectedDate(startOfDay(addDays(selectedDate, 1)))}
+        onOpenCalendar={() => setCalendarOpen(true)}
+        onLeagueChange={setSelectedLeague}
+        onOpenManageLeagues={() => setShowManageLeagues(true)}
+        onStatusChange={setSelectedStatus}
+        onSortChange={setSortBy}
+        onClearFilters={() => {
+          setSelectedLeague('ALL');
+          setSelectedStatus('ALL');
+        }}
+      />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <LeagueSelect
-            label="League"
-            value={selectedLeague}
-            options={leagueDropdownOptions}
-            onChange={setSelectedLeague}
-          />
-          <button
-            type="button"
-            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
-            onClick={() => setShowManageLeagues(true)}
-          >
-            Manage leagues
-          </button>
-          <SegmentedControl
-            options={[
-              { value: 'ALL', label: 'Todo' },
-              { value: 'LIVE', label: 'Live' },
-              { value: 'FINISHED', label: 'Finished' },
-              { value: 'PENDING', label: 'Upcoming' },
-            ]}
-            value={selectedStatus}
-            onChange={setSelectedStatus}
-            ariaLabel="Estado del partido"
-            size="sm"
-          />
-          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
-            <select
-              className="bg-transparent text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 focus:outline-none"
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-            >
-              <option value="date_desc">Newest</option>
-              <option value="date_asc">Oldest</option>
-              <option value="rating_desc">Rating desc</option>
-              <option value="rating_asc">Rating asc</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
-            onClick={() => {
-              setSelectedDate(null);
-              setSelectedLeague('ALL');
-              setSelectedStatus('ALL');
-            }}
-          >
-            Ver todas
-          </button>
-        </div>
-      </div>
-
-      {myLeagues.length > 0 && (
-        <div className="hidden flex-wrap gap-2 lg:flex">
-          {myLeagues
-            .map((id) => leagueOptions.find((league) => league.id === id))
-            .filter(Boolean)
-            .slice(0, 3)
-            .map((league) => (
-              <button
-                key={league!.id}
-                type="button"
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300 transition hover:bg-white/10"
-                onClick={() => setSelectedLeague(String(league!.id))}
-              >
-                {league!.name}
-              </button>
-            ))}
-        </div>
-      )}
 
       {loading && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
@@ -381,10 +304,10 @@ export default function MatchesClient() {
       {!loading && !error && filteredMatches.length === 0 && (
         <StateEmpty
           title="No matches on this day for selected leagues."
-          actionLabel="Ver todas"
+          actionLabel="Clear filters"
           onAction={() => {
-            setSelectedDate(null);
             setSelectedLeague('ALL');
+            setSelectedStatus('ALL');
           }}
         />
       )}
@@ -510,6 +433,16 @@ export default function MatchesClient() {
           onSaved={loadMatches}
         />
       )}
+
+      <CalendarModal
+        open={calendarOpen}
+        selected={selectedDate}
+        onSelect={(date) => {
+          setSelectedDate(date);
+          setPage(1);
+        }}
+        onClose={() => setCalendarOpen(false)}
+      />
     </section>
   );
 }

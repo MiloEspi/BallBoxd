@@ -8,10 +8,10 @@ from .importers import get_default_date_range, import_matches_global, get_import
 logger = logging.getLogger(__name__)
 
 
-def poll_finished_matches(now=None, client=None):
+def poll_finished_matches(now=None, client=None, *, raise_on_error: bool = False):
     now = now or timezone.now()
     date_from, date_to = get_default_date_range(now)
-    summary = import_matches_global(date_from, date_to, client=client)
+    summary = import_matches_global(date_from, date_to, client=client, raise_on_error=raise_on_error)
     logger.info(
         "Global match sync competitions=%s teams=%s matches=%s created=%s updated=%s skipped=%s",
         summary.competitions,

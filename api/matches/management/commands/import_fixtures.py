@@ -2,6 +2,7 @@ from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
 
+from matches.services.football_data import FootballDataError
 from matches.services.jobs import import_fixtures_once
 
 
@@ -33,11 +34,14 @@ class Command(BaseCommand):
         league_ids = options.get("league")
         date_from = _parse_date(options["date_from"])
         date_to = _parse_date(options["date_to"])
-        result = import_fixtures_once(
-            leagues=league_ids,
-            date_from=date_from,
-            date_to=date_to,
-        )
+        try:
+            result = import_fixtures_once(
+                leagues=league_ids,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except FootballDataError as exc:
+            raise CommandError(str(exc)) from exc
         self.stdout.write(
             self.style.SUCCESS(
                 f"Imported fixtures created={result.created_matches} "

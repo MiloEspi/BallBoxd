@@ -7,6 +7,7 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Avg, Case, Count, Exists, F, FloatField, IntegerField, OuterRef, Prefetch, Q, Sum, Value, When
+from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -797,31 +798,18 @@ class TeamMatchesView(APIView):
         team = get_object_or_404(Team, pk=pk)
         scope = request.query_params.get("scope", "all")
 
-        matches_qs = Match.objects.filter(
+        base_qs = Match.objects.filter(
             Q(home_team=team) | Q(away_team=team)
         ).select_related(
             "tournament",
             "home_team",
             "away_team",
-        )
-
-        now = timezone.now()
-        if scope == "recent":
-            matches_qs = matches_qs.filter(date_time__lt=now)
-        elif scope == "upcoming":
-            matches_qs = matches_qs.filter(date_time__gte=now)
-
-        matches_qs = matches_qs.annotate(
+        ).annotate(
             weighted_score_sum=Sum(F("ratings__score") * _minutes_weight_case()),
             weight_sum=Sum(_minutes_weight_case()),
             rating_count=Count("ratings"),
-        ).order_by("-date_time")
-
-        if request.user.is_authenticated:
-            my_ratings = Rating.objects.filter(user=request.user)
-            matches_qs = matches_qs.prefetch_related(
-                Prefetch("ratings", queryset=my_ratings, to_attr="my_rating_list")
-            )
+            match_day=TruncDate("date_time"),
+        )
 
         try:
             page = max(int(request.query_params.get("page", 1)), 1)
@@ -833,11 +821,48 @@ class TeamMatchesView(APIView):
             page_size = 20
         page_size = min(page_size, 50)
 
-        total = matches_qs.count()
+        now = timezone.now()
         start = (page - 1) * page_size
         end = start + page_size
 
-        serializer = SearchMatchSerializer(matches_qs[start:end], many=True)
+        if request.user.is_authenticated:
+            my_ratings = Rating.objects.filter(user=request.user)
+            base_qs = base_qs.prefetch_related(
+                Prefetch("ratings", queryset=my_ratings, to_attr="my_rating_list")
+            )
+
+        def recent_ordered(qs):
+            return qs.order_by("-match_day", "date_time")
+
+        def upcoming_ordered(qs):
+            return qs.order_by("date_time")
+
+        if scope == "upcoming":
+            matches_qs = upcoming_ordered(base_qs.filter(date_time__gte=now))
+            total = matches_qs.count()
+            results = list(matches_qs[start:end])
+        elif scope == "recent":
+            matches_qs = recent_ordered(base_qs.filter(date_time__lt=now))
+            total = matches_qs.count()
+            results = list(matches_qs[start:end])
+        else:
+            upcoming_qs = upcoming_ordered(base_qs.filter(date_time__gte=now))
+            past_qs = recent_ordered(base_qs.filter(date_time__lt=now))
+            upcoming_count = upcoming_qs.count()
+            past_count = past_qs.count()
+            total = upcoming_count + past_count
+
+            results = []
+            if start < upcoming_count:
+                upcoming_end = min(end, upcoming_count)
+                results.extend(list(upcoming_qs[start:upcoming_end]))
+
+            if end > upcoming_count:
+                past_start = max(0, start - upcoming_count)
+                past_end = max(0, end - upcoming_count)
+                results.extend(list(past_qs[past_start:past_end]))
+
+        serializer = FeedMatchSerializer(results, many=True)
         return Response(
             {
                 "page": page,

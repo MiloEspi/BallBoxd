@@ -69,3 +69,20 @@ class InternalEndpointsTests(TestCase):
         self.assertEqual(data["updated"], 1)
         self.assertEqual(data["skipped"], 1)
 
+    def test_import_fixtures_accepts_days_ahead(self):
+        url = reverse("internal-import-fixtures") + "?days_ahead=30"
+        fake = ImportFixturesResult(
+            competitions=0,
+            teams=0,
+            matches=0,
+            created_matches=0,
+            updated_matches=0,
+            skipped_matches=0,
+            api_calls_used=0,
+            duration_seconds=0.01,
+        )
+        with patch("matches.internal_views.import_fixtures_once", return_value=fake) as mocked:
+            response = self.client.post(url, HTTP_X_CRON_TOKEN="test-secret")
+        self.assertEqual(response.status_code, 200)
+        _, kwargs = mocked.call_args
+        self.assertEqual(kwargs["days_ahead"], 30)

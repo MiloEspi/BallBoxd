@@ -12,10 +12,29 @@ export default function SiteHeader() {
   const [hasToken, setHasToken] = useState(false);
   const pathname = usePathname();
 
+  const isAppRoute =
+    pathname === '/feed' ||
+    pathname.startsWith('/feed/') ||
+    pathname === '/matches' ||
+    pathname.startsWith('/matches/') ||
+    pathname === '/teams' ||
+    pathname.startsWith('/teams/') ||
+    pathname === '/search' ||
+    pathname.startsWith('/search/') ||
+    pathname === '/query' ||
+    pathname.startsWith('/query/') ||
+    pathname === '/seed' ||
+    pathname.startsWith('/seed/') ||
+    pathname.startsWith('/profile/');
+
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     setHasToken(Boolean(token));
   }, [pathname]);
+
+  if (isAppRoute) {
+    return null;
+  }
 
   return (
     <header className="border-b border-slate-800/80">

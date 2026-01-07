@@ -23,7 +23,7 @@ const buildMatchHint = (match: MatchResult) =>
   })}`;
 
 // Global search input with grouped typeahead results.
-export default function GlobalSearch() {
+export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolean }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState('');
@@ -143,6 +143,7 @@ export default function GlobalSearch() {
         onFocus={() => query.trim() && setOpen(true)}
         onKeyDown={handleKeyDown}
         aria-label="Global search"
+        autoFocus={autoFocus}
       />
 
       {open && (

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getAuthUser, getDemoStore, toSearchMatch } from '../../../_demo';
+import { getAuthUser, getDemoStore, toMatch } from '../../../_demo';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -43,16 +43,44 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
-  matches = matches.sort(
-    (left, right) =>
-      new Date(right.date_time).getTime() - new Date(left.date_time).getTime(),
-  );
+  const getDayStart = (value: string) => {
+    const date = new Date(value);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  };
+
+  const sortRecent = (left: { date_time: string }, right: { date_time: string }) => {
+    const leftDay = getDayStart(left.date_time);
+    const rightDay = getDayStart(right.date_time);
+    if (leftDay !== rightDay) {
+      return rightDay - leftDay;
+    }
+    return new Date(left.date_time).getTime() - new Date(right.date_time).getTime();
+  };
+
+  const sortUpcoming = (
+    left: { date_time: string },
+    right: { date_time: string },
+  ) => new Date(left.date_time).getTime() - new Date(right.date_time).getTime();
+
+  if (scope === 'upcoming') {
+    matches = matches.sort(sortUpcoming);
+  } else if (scope === 'recent') {
+    matches = matches.sort(sortRecent);
+  } else {
+    const upcoming = matches
+      .filter((match) => new Date(match.date_time).getTime() >= now)
+      .sort(sortUpcoming);
+    const past = matches
+      .filter((match) => new Date(match.date_time).getTime() < now)
+      .sort(sortRecent);
+    matches = [...upcoming, ...past];
+  }
 
   const total = matches.length;
   const start = (page - 1) * pageSize;
-  const results = matches.slice(start, start + pageSize).map((match) =>
-    toSearchMatch(store, match, user?.id),
-  );
+  const results = matches
+    .slice(start, start + pageSize)
+    .map((match) => toMatch(store, match, user?.id));
 
   return NextResponse.json({
     page,

@@ -1,5 +1,6 @@
 from django.db.models import Case, Count, F, FloatField, Prefetch, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -174,6 +175,11 @@ class MatchRatingView(APIView):
 
     def post(self, request, pk):
         match = get_object_or_404(Match, pk=pk)
+        if match.date_time > timezone.now():
+            return Response(
+                {"detail": "Match has not started yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if Rating.objects.filter(user=request.user, match=match).exists():
             return Response(
@@ -192,6 +198,11 @@ class MatchRatingView(APIView):
 
     def patch(self, request, pk):
         match = get_object_or_404(Match, pk=pk)
+        if match.date_time > timezone.now():
+            return Response(
+                {"detail": "Match has not started yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         rating = get_object_or_404(Rating, user=request.user, match=match)
 
         serializer = RatingUpsertSerializer(

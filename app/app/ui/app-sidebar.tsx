@@ -2,9 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-
-import { fetchMe } from '@/app/lib/api';
+import useProfileHref from '@/app/lib/use-profile-href';
 
 type NavItem = {
   href: string;
@@ -14,35 +12,7 @@ type NavItem = {
 // Renders the app navigation for mobile and desktop.
 export default function AppSidebar() {
   const pathname = usePathname();
-  const [profileHref, setProfileHref] = useState('/profile/camilo');
-
-  useEffect(() => {
-    const cachedUsername = localStorage.getItem('auth_username');
-    if (cachedUsername) {
-      setProfileHref(`/profile/${cachedUsername}`);
-    }
-
-    let isMounted = true;
-    const loadProfile = async () => {
-      try {
-        const me = await fetchMe();
-        if (!isMounted) {
-          return;
-        }
-        if (me?.username) {
-          setProfileHref(`/profile/${me.username}`);
-          localStorage.setItem('auth_username', me.username);
-        }
-      } catch {
-        // Keep the cached/default profile route when auth is missing.
-      }
-    };
-
-    loadProfile();
-    return () => {
-      isMounted = false;
-    };
-  }, [pathname]);
+  const profileHref = useProfileHref();
 
   const navItems: NavItem[] = [
     { href: '/feed', label: 'Feed' },
@@ -53,34 +23,6 @@ export default function AppSidebar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-30 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur md:hidden">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="text-[10px] uppercase tracking-[0.35em] text-slate-500">
-            BallBoxd
-          </div>
-          <div className="flex flex-1 flex-wrap justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-200">
-            {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                pathname.startsWith(`${item.href}/`);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`rounded-full px-3 py-2 transition ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-
       <aside className="sticky top-24 hidden h-[calc(100vh-10rem)] w-60 flex-col self-start rounded-3xl border border-slate-800/80 bg-[linear-gradient(160deg,_rgba(15,23,42,0.9),_rgba(2,6,23,0.95))] px-4 py-6 shadow-[0_25px_60px_rgba(0,0,0,0.35)] md:flex">
         <div className="space-y-1 px-2">
           <p className="text-xs uppercase tracking-[0.35em] text-slate-500">

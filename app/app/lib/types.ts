@@ -107,7 +107,7 @@ export type TeamMatchesResponse = {
   page: number;
   page_size: number;
   total: number;
-  results: MatchResult[];
+  results: Match[];
 };
 
 export type FeedResponse = {
