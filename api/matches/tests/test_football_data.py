@@ -102,6 +102,9 @@ class ImportMatchesTests(TestCase):
         self.assertEqual(summary.matches, 1)
         self.assertEqual(summary.teams, 2)
         self.assertEqual(summary.competitions, 1)
+        self.assertEqual(summary.created_matches, 1)
+        self.assertEqual(summary.updated_matches, 0)
+        self.assertEqual(summary.skipped_matches, 0)
 
         tournament = Tournament.objects.get(external_id=2001)
         self.assertEqual(tournament.code, "PL")
@@ -113,6 +116,16 @@ class ImportMatchesTests(TestCase):
         match = Match.objects.get(external_id=3001)
         self.assertEqual(match.home_score, 2)
         self.assertEqual(match.away_score, 1)
+
+        summary_again = import_matches_global(
+            "2024-01-01",
+            "2024-01-01",
+            client=FakeClient(),
+        )
+        self.assertEqual(summary_again.matches, 1)
+        self.assertEqual(summary_again.created_matches, 0)
+        self.assertEqual(summary_again.updated_matches, 0)
+        self.assertEqual(summary_again.skipped_matches, 1)
 
 
 class _FakeResponse:

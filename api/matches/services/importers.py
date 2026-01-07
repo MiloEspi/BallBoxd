@@ -23,6 +23,9 @@ class ImportSummary:
     competitions: int = 0
     teams: int = 0
     matches: int = 0
+    created_matches: int = 0
+    updated_matches: int = 0
+    skipped_matches: int = 0
 
 
 def get_import_range_days():
@@ -65,7 +68,7 @@ def import_competitions_tier_one(competition_ids=None, codes=None, client=None):
 
     competitions = set()
     for item in items:
-        tournament = upsert_competition_from_api(item)
+        tournament, _, _ = upsert_competition_from_api(item)
         if tournament:
             competitions.add(tournament.external_id)
     return ImportSummary(competitions=len(competitions))
@@ -95,9 +98,12 @@ def import_matches_global(date_from, date_to, competition_ids=None, client=None)
     competitions = set()
     teams = set()
     matches_seen = set()
+    created_matches = 0
+    updated_matches = 0
+    skipped_matches = 0
 
     for item in matches:
-        competition = _get_or_cache_competition(
+        competition, _, _ = _get_or_cache_competition(
             item.get("competition", {}),
             competition_cache,
         )
@@ -105,58 +111,83 @@ def import_matches_global(date_from, date_to, competition_ids=None, client=None)
             continue
         competitions.add(competition.external_id)
 
-        home_team = _get_or_cache_team(item.get("homeTeam", {}), team_cache)
-        away_team = _get_or_cache_team(item.get("awayTeam", {}), team_cache)
+        home_team, _, _ = _get_or_cache_team(item.get("homeTeam", {}), team_cache)
+        away_team, _, _ = _get_or_cache_team(item.get("awayTeam", {}), team_cache)
         if not home_team or not away_team:
             continue
         teams.add(home_team.external_id)
         teams.add(away_team.external_id)
 
-        match = upsert_match_from_api(item, competition, home_team, away_team)
+        match, created, updated = upsert_match_from_api(
+            item, competition, home_team, away_team
+        )
         if match:
             matches_seen.add(match.external_id)
+            if created:
+                created_matches += 1
+            elif updated:
+                updated_matches += 1
+            else:
+                skipped_matches += 1
 
     return ImportSummary(
         competitions=len(competitions),
         teams=len(teams),
         matches=len(matches_seen),
+        created_matches=created_matches,
+        updated_matches=updated_matches,
+        skipped_matches=skipped_matches,
     )
 
 
 def upsert_competition_from_api(competition):
     external_id = competition.get("id")
     if not external_id:
-        return None
+        return None, False, False
     name = competition.get("name") or ""
     code = competition.get("code") or ""
     emblem = competition.get("emblem") or ""
     area = competition.get("area") or {}
     country = area.get("name") or ""
+
     tournament = Tournament.objects.filter(external_id=external_id).first()
     if not tournament:
         tournament = Tournament.objects.filter(name=name, country=country).first()
-    if tournament:
-        tournament.external_id = external_id
-        tournament.name = name
-        tournament.country = country
-        tournament.code = code
-        tournament.logo_url = emblem
-        tournament.save(update_fields=["external_id", "name", "country", "code", "logo_url"])
-        return tournament
-    tournament = Tournament.objects.create(
-        external_id=external_id,
-        name=name,
-        country=country,
-        code=code,
-        logo_url=emblem,
-    )
-    return tournament
+        if tournament:
+            tournament.external_id = external_id
+
+    if not tournament:
+        tournament = Tournament.objects.create(
+            external_id=external_id,
+            name=name,
+            country=country,
+            code=code,
+            logo_url=emblem,
+        )
+        return tournament, True, False
+
+    changed_fields = []
+    for field_name, value in (
+        ("external_id", external_id),
+        ("name", name),
+        ("country", country),
+        ("code", code),
+        ("logo_url", emblem),
+    ):
+        if getattr(tournament, field_name) != value:
+            setattr(tournament, field_name, value)
+            changed_fields.append(field_name)
+
+    if changed_fields:
+        tournament.save(update_fields=changed_fields)
+        return tournament, False, True
+    return tournament, False, False
 
 
 def upsert_team_from_api(team_data):
     external_id = team_data.get("id")
     if not external_id:
-        return None
+        return None, False, False
     name = (
         team_data.get("name")
         or team_data.get("shortName")
@@ -166,66 +197,118 @@ def upsert_team_from_api(team_data):
     crest = team_data.get("crest") or team_data.get("crestUrl") or ""
     area = team_data.get("area") or {}
     country = area.get("name") or ""
-    team, _ = Team.objects.update_or_create(
-        external_id=external_id,
-        defaults={
-            "name": name,
-            "country": country,
-            "logo_url": crest,
-        },
-    )
-    return team
+    team = Team.objects.filter(external_id=external_id).first()
+    if not team:
+        team = Team.objects.filter(name__iexact=name, country=country).first()
+        if team:
+            team.external_id = external_id
+
+    if not team:
+        team = Team.objects.create(
+            external_id=external_id,
+            name=name,
+            country=country,
+            logo_url=crest,
+        )
+        return team, True, False
+
+    changed_fields = []
+    for field_name, value in (
+        ("external_id", external_id),
+        ("name", name),
+        ("country", country),
+        ("logo_url", crest),
+    ):
+        if getattr(team, field_name) != value:
+            setattr(team, field_name, value)
+            changed_fields.append(field_name)
+
+    if changed_fields:
+        team.save(update_fields=changed_fields)
+        return team, False, True
+    return team, False, False
 
 
 def upsert_match_from_api(match_data, competition, home_team, away_team):
     external_id = match_data.get("id")
     if not external_id:
-        return None
+        return None, False, False
     date_time = _parse_datetime(match_data.get("utcDate"))
     if not date_time:
-        return None
+        return None, False, False
     status = match_data.get("status") or ""
     venue = match_data.get("venue") or ""
     home_score, away_score = _extract_score(match_data.get("score") or {})
 
-    match, _ = Match.objects.update_or_create(
-        external_id=external_id,
-        defaults={
-            "tournament": competition,
-            "home_team": home_team,
-            "away_team": away_team,
-            "date_time": date_time,
-            "venue": venue,
-            "status": status,
-            "home_score": home_score,
-            "away_score": away_score,
-        },
-    )
-    return match
+    match = Match.objects.filter(external_id=external_id).first()
+    if not match:
+        match = Match.objects.filter(
+            tournament=competition,
+            home_team=home_team,
+            away_team=away_team,
+            date_time=date_time,
+        ).first()
+        if match:
+            match.external_id = external_id
+
+    if not match:
+        match = Match.objects.create(
+            external_id=external_id,
+            tournament=competition,
+            home_team=home_team,
+            away_team=away_team,
+            date_time=date_time,
+            venue=venue,
+            status=status,
+            home_score=home_score,
+            away_score=away_score,
+        )
+        return match, True, False
+
+    changed_fields = []
+    for field_name, value in (
+        ("external_id", external_id),
+        ("tournament", competition),
+        ("home_team", home_team),
+        ("away_team", away_team),
+        ("date_time", date_time),
+        ("venue", venue),
+        ("status", status),
+        ("home_score", home_score),
+        ("away_score", away_score),
+    ):
+        if getattr(match, field_name) != value:
+            setattr(match, field_name, value)
+            changed_fields.append(field_name)
+
+    if changed_fields:
+        match.save(update_fields=changed_fields)
+        return match, False, True
+    return match, False, False
 
 
 def _get_or_cache_competition(data, cache):
     external_id = data.get("id")
     if not external_id:
-        return None
+        return None, False, False
     if external_id in cache:
-        return cache[external_id]
-    tournament = upsert_competition_from_api(data)
+        return cache[external_id], False, False
+    tournament, created, updated = upsert_competition_from_api(data)
     if tournament:
         cache[external_id] = tournament
-    return tournament
+    return tournament, created, updated
 
 
 def _get_or_cache_team(data, cache):
     external_id = data.get("id")
     if not external_id:
-        return None
+        return None, False, False
     if external_id in cache:
-        return cache[external_id]
-    team = upsert_team_from_api(data)
+        return cache[external_id], False, False
+    team, created, updated = upsert_team_from_api(data)
     if team:
         cache[external_id] = team
-    return team
+    return team, created, updated
 
 
 def _extract_score(score):

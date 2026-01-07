@@ -36,10 +36,13 @@ $env:FOOTBALL_DATA_TOKEN="your_token_here"
 ```
 Optional tuning:
 ```
+FOOTBALL_DATA_RATE_LIMIT_PER_MINUTE=10
+FOOTBALL_DATA_RATE_LIMIT_WINDOW_SECONDS=60
+FOOTBALL_DATA_CACHE_SECONDS=600
 IMPORT_MATCHES_RANGE_DAYS=0
-IMPORT_MATCHES_FREQUENCY_MINUTES=60
-IMPORT_MATCHES_WEEKDAY_MINUTES=180
-IMPORT_MATCHES_WEEKEND_MINUTES=60
+IMPORT_MATCHES_FREQUENCY_MINUTES=10
+IMPORT_MATCHES_WEEKDAY_MINUTES=10
+IMPORT_MATCHES_WEEKEND_MINUTES=10
 LOG_LEVEL=INFO
 ```
 Import competitions:
@@ -49,6 +52,44 @@ python manage.py import_leagues
 Sync matches for a range (global):
 ```powershell
 python manage.py import_fixtures --from 2024-01-01 --to 2024-01-02
+```
+Poll matches every 10 minutes:
+```powershell
+python manage.py poll_matches --interval 10
+```
+Run once (for cron/scheduler):
+```powershell
+python manage.py poll_matches --once
+```
+
+### Free scheduling with cron-job.org (no Render cron/worker)
+Render Cron Jobs/Background Workers/Shell are paid. To run the polling loop for free, use an external scheduler that hits protected internal endpoints on your Render web service.
+
+Set an env var on Render:
+```
+CRON_SECRET=<long_random_secret>
+```
+
+Create a cron-job.org job:
+- Method: `POST`
+- URL: `https://<render-app>.onrender.com/internal/poll-matches`
+- Header: `X-CRON-TOKEN: <CRON_SECRET>`
+- Schedule: every 10 minutes
+
+Manual test (poll once):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/poll-matches" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
+Manual test (fixtures import/backfill):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
+Optional params for fixtures import:
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?leagues=39,140&from=2024-01-01&to=2024-01-31" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
 ```
 
 ### Endpoints principales

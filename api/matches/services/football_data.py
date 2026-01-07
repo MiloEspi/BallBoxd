@@ -4,6 +4,7 @@ from typing import Optional
 
 import httpx
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,28 @@ class FootballDataError(Exception):
 
 
 class FootballDataClient:
-    def __init__(self, token=None, base_url=None, timeout=10):
+    def __init__(self, token=None, base_url=None, timeout=10, cache_seconds=None, rate_limiter=None):
         self.token = (token or settings.FOOTBALL_DATA_TOKEN or "").strip()
         if not self.token:
             raise FootballDataError("FOOTBALL_DATA_TOKEN is not configured.")
         self.base_url = (base_url or settings.FOOTBALL_DATA_BASE_URL).rstrip("/")
         self.timeout = timeout
+        self.cache_seconds = (
+            int(cache_seconds)
+            if cache_seconds is not None
+            else int(getattr(settings, "FOOTBALL_DATA_CACHE_SECONDS", 0))
+        )
+        if rate_limiter is None:
+            rate_limit = int(getattr(settings, "FOOTBALL_DATA_RATE_LIMIT_PER_MINUTE", 0))
+            window_seconds = int(
+                getattr(settings, "FOOTBALL_DATA_RATE_LIMIT_WINDOW_SECONDS", 60)
+            )
+            if rate_limit > 0 and window_seconds > 0:
+                from .rate_limit import AsyncRateLimiter
+
+                rate_limiter = AsyncRateLimiter(rate_limit, window_seconds)
+        self.rate_limiter = rate_limiter
+        self.api_calls_used = 0
 
     async def get_competitions_tier_one(self):
         payload = await self.request("/competitions", params={"plan": "TIER_ONE"})
@@ -55,9 +72,17 @@ class FootballDataClient:
         url = f"{self.base_url}{path}"
         headers = {"X-Auth-Token": self.token}
         last_error = None
+        cache_key = self._build_cache_key(path, params)
+        if self.cache_seconds > 0:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
 
         for attempt in range(2):
             try:
+                if self.rate_limiter:
+                    await self.rate_limiter.wait()
+                self.api_calls_used += 1
                 response = await self._fetch(url, params=params, headers=headers)
             except httpx.RequestError as exc:
                 logger.warning("Football-data request error: %s", exc)
@@ -131,6 +156,9 @@ class FootballDataClient:
                 wait_seconds = reset_seconds if reset_seconds else 10
                 await asyncio.sleep(wait_seconds)
 
+            if self.cache_seconds > 0:
+                cache.set(cache_key, payload, timeout=self.cache_seconds)
+
             return payload
 
         raise FootballDataError("football-data request failed.", endpoint=path) from last_error
@@ -138,6 +166,13 @@ class FootballDataClient:
     async def _fetch(self, url, params=None, headers=None):
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             return await client.get(url, params=params, headers=headers)
+
+    def _build_cache_key(self, path, params):
+        if not params:
+            return f"football_data:{self.base_url}:{path}"
+        parts = [f"{key}={params[key]}" for key in sorted(params)]
+        query = "&".join(parts)
+        return f"football_data:{self.base_url}:{path}?{query}"
 
 
 def _parse_int(value: Optional[str]) -> Optional[int]:

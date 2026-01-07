@@ -2,7 +2,7 @@ from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
 
-from matches.services.importers import import_matches_global
+from matches.services.jobs import import_fixtures_once
 
 
 class Command(BaseCommand):
@@ -33,14 +33,16 @@ class Command(BaseCommand):
         league_ids = options.get("league")
         date_from = _parse_date(options["date_from"])
         date_to = _parse_date(options["date_to"])
-        summary = import_matches_global(
-            date_from,
-            date_to,
-            competition_ids=league_ids,
+        result = import_fixtures_once(
+            leagues=league_ids,
+            date_from=date_from,
+            date_to=date_to,
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Imported {summary.matches} fixtures via global matches."
+                f"Imported fixtures created={result.created_matches} "
+                f"updated={result.updated_matches} skipped={result.skipped_matches} "
+                f"(seen={result.matches})."
             )
         )
 
