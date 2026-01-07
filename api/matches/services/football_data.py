@@ -19,12 +19,24 @@ class FootballDataError(Exception):
 
 
 class FootballDataClient:
-    def __init__(self, token=None, base_url=None, timeout=10, cache_seconds=None, rate_limiter=None):
+    def __init__(
+        self,
+        token=None,
+        base_url=None,
+        timeout=None,
+        cache_seconds=None,
+        rate_limiter=None,
+        max_attempts=None,
+    ):
         self.token = (token or settings.FOOTBALL_DATA_TOKEN or "").strip()
         if not self.token:
             raise FootballDataError("FOOTBALL_DATA_TOKEN is not configured.")
         self.base_url = (base_url or settings.FOOTBALL_DATA_BASE_URL).rstrip("/")
-        self.timeout = timeout
+        self.timeout = (
+            float(timeout)
+            if timeout is not None
+            else float(getattr(settings, "FOOTBALL_DATA_TIMEOUT_SECONDS", 20))
+        )
         self.cache_seconds = (
             int(cache_seconds)
             if cache_seconds is not None
@@ -41,6 +53,11 @@ class FootballDataClient:
                 rate_limiter = AsyncRateLimiter(rate_limit, window_seconds)
         self.rate_limiter = rate_limiter
         self.api_calls_used = 0
+        self.max_attempts = (
+            int(max_attempts)
+            if max_attempts is not None
+            else int(getattr(settings, "FOOTBALL_DATA_HTTP_MAX_ATTEMPTS", 3))
+        )
 
     async def get_competitions_tier_one(self):
         payload = await self.request("/competitions", params={"plan": "TIER_ONE"})
@@ -78,19 +95,29 @@ class FootballDataClient:
             if cached is not None:
                 return cached
 
-        for attempt in range(2):
+        attempts = max(1, int(self.max_attempts))
+        for attempt in range(attempts):
             try:
                 if self.rate_limiter:
                     await self.rate_limiter.wait()
                 self.api_calls_used += 1
                 response = await self._fetch(url, params=params, headers=headers)
             except httpx.RequestError as exc:
-                logger.warning("Football-data request error: %s", exc)
+                logger.warning(
+                    "Football-data request error attempt=%s/%s endpoint=%s error=%s",
+                    attempt + 1,
+                    attempts,
+                    path,
+                    exc,
+                )
                 last_error = exc
-                if attempt == 0:
-                    await asyncio.sleep(1)
+                if attempt < attempts - 1:
+                    await asyncio.sleep(1 + attempt)
                     continue
-                raise FootballDataError("Network error calling football-data.org.") from exc
+                raise FootballDataError(
+                    f"Network error calling football-data.org: {exc}",
+                    endpoint=path,
+                ) from exc
 
             available = _parse_int(response.headers.get("X-Requests-Available-Minute"))
             reset_seconds = _parse_int(response.headers.get("X-RequestCounter-Reset"))
@@ -112,7 +139,7 @@ class FootballDataClient:
             if response.status_code == 429:
                 wait_seconds = reset_seconds if reset_seconds else 10
                 logger.warning("football-data rate limited, retry in %ss", wait_seconds)
-                if attempt == 0:
+                if attempt < attempts - 1:
                     await asyncio.sleep(wait_seconds)
                     continue
                 raise FootballDataError(

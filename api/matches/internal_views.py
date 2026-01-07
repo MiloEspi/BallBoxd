@@ -236,8 +236,9 @@ def poll_matches_view(request):
                 "status_code": exc.status_code,
                 "endpoint": exc.endpoint,
                 "detail": str(exc),
+                "retryable": True,
             },
-            status=502,
+            status=200,
         )
     except Exception:
         logger.exception("Internal poll-matches failed.")
