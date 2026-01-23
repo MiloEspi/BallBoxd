@@ -157,6 +157,12 @@ export default function Page({ params }: MatchPageProps) {
       'bg-slate-600/20 text-slate-200 border-slate-500/40 shadow-[0_0_18px_rgba(148,163,184,0.2)]',
   };
   const statusClass = statusToneStyles[statusMeta.tone] ?? statusToneStyles.neutral;
+  const watchabilityValue =
+    match.watchability_score !== null && match.watchability_score !== undefined
+      ? `${match.watchability_score}${
+          match.watchability_confidence ? ` (${match.watchability_confidence})` : ''
+        }`
+      : '-';
 
   const openRateModal = (origin?: { x: number; y: number }) => {
     setModalOrigin(origin ?? null);
@@ -320,6 +326,10 @@ export default function Page({ params }: MatchPageProps) {
           {
             label: 'Full watched %',
             value: hasRatings ? `${full_watched_pct}%` : '-',
+          },
+          {
+            label: 'Watchability',
+            value: watchabilityValue,
           },
           {
             label: 'Kickoff status',

@@ -70,6 +70,15 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
   };
   const statusClass = statusToneStyles[statusMeta.tone] ?? statusToneStyles.neutral;
   const ringPercent = Math.min(100, Math.max(0, avgScore));
+  const hasWatchability =
+    match.watchability_score !== null && match.watchability_score !== undefined;
+  const watchabilityLabel = hasWatchability
+    ? `W ${match.watchability_score}`
+    : null;
+  const watchabilityConfidence =
+    hasWatchability && match.watchability_confidence
+      ? match.watchability_confidence
+      : null;
 
   return (
     <article
@@ -150,8 +159,8 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         </div>
 
         <div className="rounded-2xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="relative">
                 <div className="pointer-events-none absolute -inset-5 rounded-full bg-emerald-400/20 blur-2xl" />
                 <div
@@ -169,7 +178,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
               </div>
               {hasRatings && (
                 <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400">
-                  {ratingLabel} · {ratingCountLabel}
+                  {ratingLabel} | {ratingCountLabel}
                 </div>
               )}
             </div>
@@ -187,7 +196,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           className="rounded-full bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_10px_25px_rgba(255,255,255,0.2)] transition hover:-translate-y-0.5 hover:bg-slate-200 active:translate-y-0 active:scale-[0.98]"
           type="button"
@@ -202,6 +211,12 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         >
           {match.my_rating ? 'Update rating' : 'Rate match'}
         </button>
+        {hasWatchability && (
+          <span className="rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200">
+            {watchabilityLabel}
+            {watchabilityConfidence ? ` | ${watchabilityConfidence}` : ''}
+          </span>
+        )}
       </div>
     </article>
   );

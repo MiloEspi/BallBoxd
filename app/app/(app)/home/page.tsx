@@ -4,28 +4,35 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import FriendsActivityCard from '@/app/components/feed/FriendsActivityCard';
+import MatchCard from '@/app/components/match/MatchCard';
+import RateMatchModal from '@/app/components/match/RateMatchModal';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
-import { ApiError, fetchFriendsFeed, fetchMe } from '@/app/lib/api';
-import type { FriendsFeedItem } from '@/app/lib/types';
-import SegmentedControl from '@/app/ui/segmented-control';
+import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
+import { ApiError, fetchFeed, fetchFriendsFeed, fetchMe } from '@/app/lib/api';
+import type { FriendsFeedItem, Match } from '@/app/lib/types';
 
 type ErrorState = {
   message: string;
   action: 'retry' | 'login';
 };
 
-type TabKey = 'friends' | 'today';
-
-// Friends feed landing page with a lightweight Today tab.
+// Home page with friends activity + team matches feed.
 export default function Page() {
   const router = useRouter();
-  const [tab, setTab] = useState<TabKey>('friends');
   const [items, setItems] = useState<FriendsFeedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
   const [profileLink, setProfileLink] = useState('');
+  const [teamMatches, setTeamMatches] = useState<Match[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState<ErrorState | null>(null);
+  const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+  const [modalOrigin, setModalOrigin] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const loadFeed = async () => {
     setLoading(true);
@@ -50,8 +57,32 @@ export default function Page() {
     }
   };
 
+  const loadTeamFeed = async () => {
+    setTeamLoading(true);
+    setTeamError(null);
+    try {
+      const response = await fetchFeed();
+      setTeamMatches(response.results);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setTeamError({
+          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          action: 'login',
+        });
+      } else {
+        setTeamError({
+          message: 'No pudimos cargar los partidos.',
+          action: 'retry',
+        });
+      }
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadFeed();
+    loadTeamFeed();
   }, []);
 
   useEffect(() => {
@@ -85,95 +116,165 @@ export default function Page() {
   );
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-10">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Home</h1>
         <p className="text-sm text-slate-400">
-          Lo ultimo que vieron tus amigos.
+          Actividad social y partidos de tus equipos.
         </p>
       </header>
 
-      <SegmentedControl
-        options={[
-          { value: 'friends', label: 'Friends' },
-          { value: 'today', label: 'Today' },
-        ]}
-        value={tab}
-        onChange={(value) => setTab(value as TabKey)}
-        ariaLabel="Feed tabs"
-        size="sm"
-      />
-
-      {tab === 'friends' && (
-        <>
-          {loading && (
-            <div className="space-y-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <SkeletonBlock key={`friends-skeleton-${index}`} className="h-24" />
-              ))}
-            </div>
-          )}
-
-          {!loading && error && (
-            <StateError
-              message={error.message}
-              actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
-              onAction={
-                error.action === 'login'
-                  ? () => router.push('/login')
-                  : loadFeed
-              }
-            />
-          )}
-
-          {!loading && !error && items.length === 0 && (
-            <div className="space-y-4">
-              {emptyState}
-              {profileLink && (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Comparte tu perfil
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
-                      {profileLink}
-                    </span>
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
-                      onClick={() => navigator.clipboard.writeText(profileLink)}
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {!loading && !error && items.length > 0 && (
-            <div className="space-y-4">
-              {items.map((item) => (
-                <FriendsActivityCard key={`${item.actor.id}-${item.match.id}`} item={item} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {tab === 'today' && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300">
-          <p className="text-sm text-slate-300">
-            Explora los partidos del dia en tu feed de equipos.
-          </p>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Actividad de amigos</h2>
+            <p className="text-sm text-slate-400">
+              Lo ultimo que vieron tus amigos.
+            </p>
+          </div>
           <button
             type="button"
-            className="mt-4 rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
-            onClick={() => router.push('/feed')}
+            className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+            onClick={() => router.push('/search?tab=users')}
           >
-            Ver feed de equipos
+            Buscar amigos
           </button>
         </div>
+
+        {loading && (
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonBlock key={`friends-skeleton-${index}`} className="h-24" />
+            ))}
+          </div>
+        )}
+
+        {!loading && error && (
+          <StateError
+            message={error.message}
+            actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+            onAction={
+              error.action === 'login'
+                ? () => router.push('/login')
+                : loadFeed
+            }
+          />
+        )}
+
+        {!loading && !error && items.length === 0 && (
+          <div className="space-y-4">
+            {emptyState}
+            {profileLink && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Comparte tu perfil
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
+                    {profileLink}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+                    onClick={() => navigator.clipboard.writeText(profileLink)}
+                  >
+                    Copiar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && items.length > 0 && (
+          <div className="space-y-4">
+            {items.map((item) => (
+              <FriendsActivityCard
+                key={`${item.actor.id}-${item.match.id}`}
+                item={item}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Feed de partidos</h2>
+            <p className="text-sm text-slate-400">
+              Partidos de equipos que seguis.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+            onClick={() => router.push('/feed')}
+          >
+            Ver todo
+          </button>
+        </div>
+
+        {teamLoading && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonMatchCard key={`team-feed-skeleton-${index}`} />
+            ))}
+          </div>
+        )}
+
+        {!teamLoading && teamError && (
+          <StateError
+            message={teamError.message}
+            actionLabel={teamError.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+            onAction={
+              teamError.action === 'login'
+                ? () => router.push('/login')
+                : loadTeamFeed
+            }
+          />
+        )}
+
+        {!teamLoading && !teamError && teamMatches.length === 0 && (
+          <StateEmpty
+            title="Todavia no seguis equipos."
+            description="Segui equipos para ver sus partidos aca."
+            actionLabel="Explorar equipos"
+            onAction={() => router.push('/teams')}
+          />
+        )}
+
+        {!teamLoading && !teamError && teamMatches.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {teamMatches.slice(0, 6).map((match) => (
+              <MatchCard
+                key={match.id}
+                match={match}
+                onRate={(selected, origin) => {
+                  setActiveMatch(selected);
+                  setModalOrigin(origin ?? null);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {activeMatch && (
+        <RateMatchModal
+          matchId={activeMatch.id}
+          initialScore={activeMatch.my_rating?.score}
+          initialMinutesWatched={activeMatch.my_rating?.minutes_watched}
+          initialReview={activeMatch.my_rating?.review}
+          origin={modalOrigin}
+          onClose={() => {
+            setActiveMatch(null);
+            setModalOrigin(null);
+          }}
+          onSaved={() => {
+            loadTeamFeed();
+          }}
+        />
       )}
     </section>
   );

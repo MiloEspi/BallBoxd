@@ -1,11 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { usePathname, useRouter } from 'next/navigation';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import useProfileHref from '@/app/lib/use-profile-href';
-import GlobalSearch from '@/app/components/search/GlobalSearch';
 
 type NavItem = {
   href: string;
@@ -14,9 +12,9 @@ type NavItem = {
 
 // Renders the app navigation for mobile and desktop.
 export default function AppSidebar() {
+  const router = useRouter();
   const pathname = usePathname();
   const profileHref = useProfileHref();
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const navItems: NavItem[] = [
     { href: '/home', label: 'Home' },
@@ -37,7 +35,7 @@ export default function AppSidebar() {
             <button
               type="button"
               className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => router.push('/search')}
               aria-label="Buscar"
             >
               <MagnifyingGlassIcon className="h-4 w-4" />
@@ -77,41 +75,11 @@ export default function AppSidebar() {
         <div className="mt-auto space-y-4">
           <div className="h-px w-full bg-slate-800/80" />
           <div className="rounded-2xl border border-slate-800/70 bg-slate-900/50 px-4 py-3 text-xs text-slate-400">
-            Atajo rǭpido para explorar la jornada y tus ratings.
+            Atajo ropido para explorar la jornada y tus ratings.
           </div>
         </div>
       </aside>
 
-      {searchOpen && (
-        <div
-          className="fixed inset-0 z-50 hidden items-start justify-center bg-black/70 p-6 md:flex"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Buscar"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setSearchOpen(false);
-            }
-          }}
-        >
-          <div className="mt-16 w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950/95 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)] backdrop-blur">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                Buscar
-              </div>
-              <button
-                type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
-                onClick={() => setSearchOpen(false)}
-                aria-label="Cerrar busqueda"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <GlobalSearch autoFocus />
-          </div>
-        </div>
-      )}
     </>
   );
 }

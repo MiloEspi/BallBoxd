@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 import MatchResultCard from '@/app/components/search/MatchResultCard';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
@@ -48,6 +49,7 @@ export default function SearchClient() {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
+  const [draft, setDraft] = useState(query);
 
   const updateQuery = (updates: Record<string, string | number | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -60,6 +62,21 @@ export default function SearchClient() {
     });
     router.push(`/search?${params.toString()}`);
   };
+
+  useEffect(() => {
+    setDraft(query);
+  }, [query]);
+
+  useEffect(() => {
+    const trimmed = draft.trim();
+    if (trimmed === query.trim()) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      updateQuery({ q: trimmed, page: 1 });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [draft, query]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -113,11 +130,22 @@ export default function SearchClient() {
 
   return (
     <section className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Busqueda</h1>
-        <p className="text-sm text-slate-400">
-          Resultados para &quot;{query || '...'}&quot;.
-        </p>
+      <header className="sticky top-14 z-20 -mx-2 rounded-2xl border border-slate-800/70 bg-slate-950/95 px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur md:top-6">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-full border border-slate-700/70 bg-slate-900/70 px-4 py-2">
+            <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
+            <input
+              className="w-full bg-transparent text-sm text-slate-100 outline-none"
+              placeholder="Buscar usuarios, equipos, ligas o partidos..."
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              aria-label="Buscar"
+            />
+          </div>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            {query ? `Resultados para "${query}"` : 'Busca algo'}
+          </div>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">

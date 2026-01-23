@@ -32,11 +32,9 @@ export default function ImageUpload({
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState('');
-  const [pending, setPending] = useState<string | null>(null);
-  const [pendingName, setPendingName] = useState('');
   const [processing, setProcessing] = useState(false);
   const acceptedTypes = ['image/jpeg', 'image/png'];
-  const previewSrc = pending ?? value ?? '';
+  const previewSrc = value ?? '';
 
   const handlePick = () => {
     if (!disabled) {
@@ -60,9 +58,8 @@ export default function ImageUpload({
     setProcessing(true);
     try {
       const nextValue = await processSquareImage(file, minSize);
-      setPending(nextValue);
-      setPendingName(file.name);
-      onPendingChange?.(true);
+      onChange(nextValue);
+      onPendingChange?.(false);
     } catch (err) {
       if (err instanceof Error && err.message.includes('Minimo')) {
         setError(`Image too small. Minimum size is ${minSize}x${minSize}.`);
@@ -75,22 +72,6 @@ export default function ImageUpload({
       setProcessing(false);
     }
     event.target.value = '';
-  };
-
-  const handleConfirm = () => {
-    if (!pending) {
-      return;
-    }
-    onChange(pending);
-    setPending(null);
-    setPendingName('');
-    onPendingChange?.(false);
-  };
-
-  const handleCancelPending = () => {
-    setPending(null);
-    setPendingName('');
-    onPendingChange?.(false);
   };
 
   return (
@@ -139,30 +120,6 @@ export default function ImageUpload({
           </div>
         )}
       </div>
-
-      {pending && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
-          <span className="uppercase tracking-[0.2em]">
-            Vista previa{pendingName ? ` - ${pendingName}` : ''}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-full border border-slate-700 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
-              type="button"
-              onClick={handleCancelPending}
-            >
-              Cancelar
-            </button>
-            <button
-              className="rounded-full bg-emerald-300 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-emerald-200"
-              type="button"
-              onClick={handleConfirm}
-            >
-              Confirmar imagen
-            </button>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">

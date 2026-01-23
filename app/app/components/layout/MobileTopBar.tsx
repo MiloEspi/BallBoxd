@@ -1,15 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import {
-  MagnifyingGlassIcon,
-  UserCircleIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
-
-import GlobalSearch from '@/app/components/search/GlobalSearch';
+import { MagnifyingGlassIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import useProfileHref from '@/app/lib/use-profile-href';
 
 type NavItem = {
@@ -18,9 +12,9 @@ type NavItem = {
 };
 
 export default function MobileTopBar() {
+  const router = useRouter();
   const pathname = usePathname();
   const profileHref = useProfileHref();
-  const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -64,7 +58,7 @@ export default function MobileTopBar() {
               <button
                 type="button"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
-                onClick={() => setSearchOpen(true)}
+                onClick={() => router.push('/search')}
                 aria-label="Buscar"
               >
                 <MagnifyingGlassIcon className="h-5 w-5" />
@@ -75,7 +69,7 @@ export default function MobileTopBar() {
                   type="button"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
                   onClick={() => setMenuOpen((prev) => !prev)}
-                  aria-label="Menú"
+                  aria-label="Menu"
                 >
                   <UserCircleIcon className="h-6 w-6" />
                 </button>
@@ -94,7 +88,7 @@ export default function MobileTopBar() {
                       className="block rounded-xl px-3 py-2 text-sm font-semibold text-white hover:bg-white/10"
                       onClick={() => setMenuOpen(false)}
                     >
-                      Cerrar sesión
+                      Cerrar sesion
                     </Link>
                   </div>
                 )}
@@ -124,36 +118,7 @@ export default function MobileTopBar() {
         </div>
       </div>
 
-      {searchOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Buscar"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setSearchOpen(false);
-            }
-          }}
-        >
-          <div className="mt-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-[0_25px_70px_rgba(0,0,0,0.6)] backdrop-blur">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                Buscar
-              </div>
-              <button
-                type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
-                onClick={() => setSearchOpen(false)}
-                aria-label="Cerrar búsqueda"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <GlobalSearch autoFocus />
-          </div>
-        </div>
-      )}
+
     </>
   );
 }

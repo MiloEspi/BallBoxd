@@ -22,7 +22,6 @@ export default function ProfileAvatarModal({
   const [mounted, setMounted] = useState(false);
   const [avatar, setAvatar] = useState(value);
   const [error, setError] = useState('');
-  const [hasPending, setHasPending] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -34,7 +33,6 @@ export default function ProfileAvatarModal({
     }
     setAvatar(value);
     setError('');
-    setHasPending(false);
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -48,10 +46,6 @@ export default function ProfileAvatarModal({
     setError('');
     if (!avatar) {
       setError('Subi una imagen para continuar.');
-      return;
-    }
-    if (hasPending) {
-      setError('Confirma la imagen antes de guardar.');
       return;
     }
     onSave(avatar);
@@ -107,7 +101,7 @@ export default function ProfileAvatarModal({
               onClear={() => setAvatar('')}
               minSize={300}
               previewClassName="max-w-[200px] max-h-[200px]"
-              onPendingChange={setHasPending}
+              onPendingChange={() => {}}
             />
 
             {error && (
@@ -129,7 +123,6 @@ export default function ProfileAvatarModal({
               className="rounded-full bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
               onClick={handleSave}
-              disabled={hasPending}
             >
               Guardar foto
             </button>
