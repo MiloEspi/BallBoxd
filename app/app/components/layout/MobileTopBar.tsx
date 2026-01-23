@@ -25,7 +25,7 @@ export default function MobileTopBar() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const navItems: NavItem[] = [
-    { href: '/feed', label: 'Feed' },
+    { href: '/home', label: 'Home' },
     { href: '/matches', label: 'Partidos' },
     { href: '/teams', label: 'Equipos' },
     { href: profileHref, label: 'Perfil' },
@@ -53,7 +53,7 @@ export default function MobileTopBar() {
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="flex h-12 items-center justify-between gap-3">
             <Link
-              href="/feed"
+              href="/home"
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-slate-200 shadow-[inset_0_0_18px_rgba(255,255,255,0.06)]"
               aria-label="BallBoxd"
             >
@@ -157,4 +157,3 @@ export default function MobileTopBar() {
     </>
   );
 }
-

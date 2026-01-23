@@ -64,6 +64,9 @@ export type Match = {
   avg_score?: number;
   rating_count?: number;
   my_rating?: Rating | null;
+  watchability_score?: number | null;
+  watchability_confidence?: string | null;
+  watchability_updated_at?: string | null;
 };
 
 export type League = {
@@ -90,6 +93,7 @@ export type MatchResult = {
 };
 
 export type SearchResults = {
+  users: UserMini[];
   teams: Team[];
   leagues: League[];
   matches: MatchResult[];
@@ -101,6 +105,45 @@ export type SearchResponse = {
   page_size: number;
   total: number;
   results: SearchResults;
+};
+
+export type FriendsFeedMatch = {
+  id: number;
+  title: string;
+  date_time: string;
+  home_team: TeamSummary;
+  away_team: TeamSummary;
+};
+
+export type FriendsFeedItem = {
+  actor: UserMini;
+  match: FriendsFeedMatch;
+  rating_score: number;
+  review_snippet: string;
+  created_at: string;
+};
+
+export type FriendsFeedResponse = {
+  page: number;
+  page_size: number;
+  total: number;
+  results: FriendsFeedItem[];
+};
+
+export type PublicProfileRatingsResponse = {
+  user: UserMini;
+  is_following: boolean;
+  stats: ProfileStats;
+  page: number;
+  page_size: number;
+  total: number;
+  ratings: RatingWithMatch[];
+};
+
+export type FollowStateResponse = {
+  is_following: boolean;
+  followers: number;
+  following: number;
 };
 
 export type TeamMatchesResponse = {

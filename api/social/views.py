@@ -27,12 +27,14 @@ from matches.serializers import (
 )
 from .models import Follow, UserFollow
 from .serializers import (
+    FriendsFeedResponseSerializer,
     ProfileActivityResponseSerializer,
     ProfileHighlightsResponseSerializer,
     ProfileMemoriesResponseSerializer,
     ProfileResponseSerializer,
     ProfileRatedResponseSerializer,
     ProfileStatsResponseSerializer,
+    PublicProfileRatingsResponseSerializer,
 )
 
 User = get_user_model()
@@ -120,6 +122,66 @@ class FeedView(APIView):
         )
 
 
+class FriendsFeedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Returns activity from users the current user follows.
+    def get(self, request):
+        following_ids = UserFollow.objects.filter(
+            follower=request.user
+        ).values_list("following_id", flat=True)
+
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+        except ValueError:
+            page = 1
+        try:
+            page_size = max(int(request.query_params.get("page_size", 20)), 1)
+        except ValueError:
+            page_size = 20
+        page_size = min(page_size, 50)
+
+        ratings_qs = (
+            Rating.objects.filter(user_id__in=following_ids)
+            .select_related(
+                "user",
+                "match",
+                "match__tournament",
+                "match__home_team",
+                "match__away_team",
+            )
+            .order_by("-created_at")
+        )
+        total = ratings_qs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        results = ratings_qs[start:end]
+
+        payload = {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "results": [
+                {
+                    "actor": rating.user,
+                    "match": {
+                        "id": rating.match.id,
+                        "title": f"{rating.match.home_team} vs {rating.match.away_team}",
+                        "date_time": rating.match.date_time,
+                        "home_team": rating.match.home_team,
+                        "away_team": rating.match.away_team,
+                    },
+                    "rating_score": rating.score,
+                    "review_snippet": (rating.review or "")[:140],
+                    "created_at": rating.created_at,
+                }
+                for rating in results
+            ],
+        }
+        serializer = FriendsFeedResponseSerializer(payload)
+        return Response(serializer.data)
+
+
 class TeamsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -154,6 +216,13 @@ class ProfileView(APIView):
             total_ratings=Count("id"),
             avg_score=Avg("score"),
         )
+        total_ratings = stats["total_ratings"] or 0
+        full_count = ratings_qs.filter(
+            minutes_watched=Rating.MinutesWatched.FULL
+        ).count()
+        fully_watched_pct = (
+            round((full_count / total_ratings) * 100, 2) if total_ratings else 0.0
+        )
 
         payload = {
             "user": profile_user,
@@ -168,6 +237,67 @@ class ProfileView(APIView):
         }
 
         serializer = ProfileResponseSerializer(payload)
+        return Response(serializer.data)
+
+
+class PublicProfileView(APIView):
+    permission_classes = [AllowAny]
+
+    # Returns public profile with stats and recent ratings list.
+    def get(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+
+        ratings_qs = Rating.objects.filter(user=profile_user).select_related(
+            "match",
+            "match__tournament",
+            "match__home_team",
+            "match__away_team",
+        )
+
+        stats = ratings_qs.aggregate(
+            total_ratings=Count("id"),
+            avg_score=Avg("score"),
+        )
+
+        try:
+            page = max(int(request.query_params.get("page", 1)), 1)
+        except ValueError:
+            page = 1
+        try:
+            page_size = max(int(request.query_params.get("page_size", 10)), 1)
+        except ValueError:
+            page_size = 10
+        page_size = min(page_size, 50)
+
+        total = ratings_qs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        ratings_list = ratings_qs.order_by("-created_at")[start:end]
+
+        is_following = False
+        if request.user.is_authenticated:
+            is_following = UserFollow.objects.filter(
+                follower=request.user, following=profile_user
+            ).exists()
+
+        payload = {
+            "user": profile_user,
+            "is_following": is_following,
+            "stats": {
+                "total_ratings": total_ratings,
+                "avg_score": float(stats["avg_score"] or 0),
+                "teams_followed": Follow.objects.filter(user=profile_user).count(),
+                "followers": UserFollow.objects.filter(following=profile_user).count(),
+                "following": UserFollow.objects.filter(follower=profile_user).count(),
+                "fully_watched_pct": fully_watched_pct,
+            },
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "ratings": ratings_list,
+        }
+
+        serializer = PublicProfileRatingsResponseSerializer(payload)
         return Response(serializer.data)
 
 
@@ -627,11 +757,12 @@ class SearchView(APIView):
             return Response({"detail": "q is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         raw_types = request.query_params.get("types")
-        types = (
-            {item.strip() for item in raw_types.split(",") if item.strip()}
-            if raw_types
-            else {"teams", "leagues", "matches"}
-        )
+        if raw_types:
+            types = {item.strip() for item in raw_types.split(",") if item.strip()}
+            if "all" in types:
+                types = {"users", "teams", "leagues", "matches"}
+        else:
+            types = {"users", "teams", "leagues", "matches"}
 
         league_id = request.query_params.get("league_id")
         date_from = request.query_params.get("date_from")
@@ -657,12 +788,31 @@ class SearchView(APIView):
                     "page": page,
                     "page_size": page_size,
                     "total": 0,
-                    "results": {"teams": [], "leagues": [], "matches": []},
+                    "results": {
+                        "users": [],
+                        "teams": [],
+                        "leagues": [],
+                        "matches": [],
+                    },
                 }
             )
 
-        results = {"teams": [], "leagues": [], "matches": []}
+        results = {"users": [], "teams": [], "leagues": [], "matches": []}
         total = 0
+
+        if "users" in types:
+            users_qs = User.objects.all()
+            for token in tokens:
+                users_qs = users_qs.filter(username__icontains=token)
+            users_qs = users_qs.annotate(rank=_rank_by_query("username", q)).order_by(
+                "rank", "username"
+            )
+            total += users_qs.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            results["users"] = UserMiniSerializer(
+                users_qs[start:end], many=True
+            ).data
 
         if "teams" in types:
             teams_qs = Team.objects.all()
@@ -907,6 +1057,46 @@ class UserFollowView(APIView):
     def delete(self, request, pk):
         UserFollow.objects.filter(follower=request.user, following_id=pk).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserFollowByUsernameView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Follows another user by username.
+    def post(self, request, username):
+        target = get_object_or_404(User, username=username)
+        if request.user == target:
+            return Response(
+                {"detail": "Cannot follow yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        UserFollow.objects.get_or_create(follower=request.user, following=target)
+        return Response(
+            {
+                "is_following": True,
+                "followers": UserFollow.objects.filter(following=target).count(),
+                "following": UserFollow.objects.filter(follower=target).count(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    # Unfollows another user by username.
+    def delete(self, request, username):
+        target = get_object_or_404(User, username=username)
+        if request.user == target:
+            return Response(
+                {"detail": "Cannot unfollow yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        UserFollow.objects.filter(follower=request.user, following=target).delete()
+        return Response(
+            {
+                "is_following": False,
+                "followers": UserFollow.objects.filter(following=target).count(),
+                "following": UserFollow.objects.filter(follower=target).count(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class MeView(APIView):

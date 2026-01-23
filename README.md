@@ -92,6 +92,11 @@ Manual test (fixtures import/backfill):
 curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures" \
   -H "X-CRON-TOKEN: <CRON_SECRET>"
 ```
+Manual test (watchability recompute for upcoming days):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/recompute-watchability?days=7" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
 Import next 30 days (good for a daily cron):
 ```bash
 curl -X POST "https://<render-app>.onrender.com/internal/import-fixtures?days_ahead=30" \

@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 
-import { getAuthUser, getDemoStore, toSearchMatch, toTeam, toTournament } from '../_demo';
+import {
+  getAuthUser,
+  getDemoStore,
+  toSearchMatch,
+  toTeam,
+  toTournament,
+  toUserMini,
+} from '../_demo';
 
 const normalizeText = (value: string) =>
   value
@@ -44,14 +51,17 @@ export async function GET(request: Request) {
   }
 
   const rawTypes = url.searchParams.get('types');
-  const types = rawTypes
+  let types = rawTypes
     ? new Set(
         rawTypes
           .split(',')
           .map((value) => value.trim())
           .filter(Boolean),
       )
-    : new Set(['teams', 'leagues', 'matches']);
+    : new Set(['users', 'teams', 'leagues', 'matches']);
+  if (types.has('all')) {
+    types = new Set(['users', 'teams', 'leagues', 'matches']);
+  }
 
   const leagueIdParam = url.searchParams.get('league_id');
   const leagueId = leagueIdParam && /^\d+$/.test(leagueIdParam) ? Number(leagueIdParam) : null;
@@ -71,15 +81,25 @@ export async function GET(request: Request) {
       page,
       page_size: pageSize,
       total: 0,
-      results: { teams: [], leagues: [], matches: [] },
+      results: { users: [], teams: [], leagues: [], matches: [] },
     });
   }
-  const results = { teams: [], leagues: [], matches: [] } as {
+  const results = { users: [], teams: [], leagues: [], matches: [] } as {
+    users: ReturnType<typeof toUserMini>[];
     teams: ReturnType<typeof toTeam>[];
     leagues: ReturnType<typeof toTournament>[];
     matches: ReturnType<typeof toSearchMatch>[];
   };
   let total = 0;
+
+  if (types.has('users')) {
+    let users = store.users.filter((user) =>
+      tokens.every((token) => normalizeText(user.username).includes(token)),
+    );
+    users = users.sort((a, b) => a.username.localeCompare(b.username));
+    total += users.length;
+    results.users = paginate(users, page, pageSize).map(toUserMini);
+  }
 
   if (types.has('teams')) {
     let teams = store.teams.filter((team) =>

@@ -2,7 +2,10 @@
 import type {
   FeedResponse,
   FeaturedPrimaryImage,
+  FollowStateResponse,
+  FriendsFeedResponse,
   MatchDetailResponse,
+  PublicProfileRatingsResponse,
   ProfileActivityResponse,
   ProfileHighlightsResponse,
   ProfileMemoriesResponse,
@@ -199,6 +202,16 @@ export function fetchFeed() {
   });
 }
 
+// Friends activity feed endpoint.
+export function fetchFriendsFeed(page: number = 1, pageSize: number = 20) {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize));
+  return authRequest<FriendsFeedResponse>(`/feed/friends?${params.toString()}`, {
+    method: 'GET',
+  });
+}
+
 // Returns the authenticated user.
 export function fetchMe() {
   return authRequest<UserMini>('/me', {
@@ -243,6 +256,23 @@ export function fetchProfile(username: string) {
   return authRequest<ProfileResponse>(`/profile/${username}`, {
     method: 'GET',
   });
+}
+
+// Public profile endpoint (stats + paginated ratings).
+export function fetchPublicProfile(
+  username: string,
+  page: number = 1,
+  pageSize: number = 10,
+) {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize));
+  return authRequest<PublicProfileRatingsResponse>(
+    `/users/${username}/public?${params.toString()}`,
+    {
+      method: 'GET',
+    },
+  );
 }
 
 // Profile stats tab endpoint.
@@ -449,6 +479,19 @@ export function followTeam(teamId: number) {
 
 export function unfollowTeam(teamId: number) {
   return authRequest(`/teams/${teamId}/follow`, {
+    method: 'DELETE',
+  });
+}
+
+// Follow/unfollow user endpoints by username.
+export function followUser(username: string) {
+  return authRequest<FollowStateResponse>(`/users/${username}/follow`, {
+    method: 'POST',
+  });
+}
+
+export function unfollowUser(username: string) {
+  return authRequest<FollowStateResponse>(`/users/${username}/follow`, {
     method: 'DELETE',
   });
 }

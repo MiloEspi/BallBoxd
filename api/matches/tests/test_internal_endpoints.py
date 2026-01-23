@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from matches.models import Match, Team, Tournament
 from matches.services.jobs import ImportFixturesResult, PollMatchesResult
 
 
@@ -86,3 +88,27 @@ class InternalEndpointsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         _, kwargs = mocked.call_args
         self.assertEqual(kwargs["days_ahead"], 30)
+
+    def test_recompute_watchability_updates_matches(self):
+        tournament = Tournament.objects.create(name="Test League")
+        home = Team.objects.create(name="Home")
+        away = Team.objects.create(name="Away")
+        match = Match.objects.create(
+            tournament=tournament,
+            home_team=home,
+            away_team=away,
+            date_time=timezone.now() + timezone.timedelta(days=1),
+        )
+
+        url = reverse("internal-recompute-watchability")
+        fake = {"watchability": 70, "confidence_label": "Low"}
+        with patch("matches.internal_views.compute_watchability", return_value=fake):
+            response = self.client.post(url, HTTP_X_CRON_TOKEN="test-secret")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["updated"], 1)
+        match.refresh_from_db()
+        self.assertEqual(match.watchability_score, 70)
+        self.assertEqual(match.watchability_confidence, "Low")
+        self.assertIsNotNone(match.watchability_updated_at)

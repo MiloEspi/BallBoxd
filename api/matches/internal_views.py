@@ -1,6 +1,7 @@
 import hmac
 import json
 import logging
+import time
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -12,7 +13,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from matches.services.football_data import FootballDataError
+from matches.models import Match
 from matches.services.jobs import import_fixtures_once, poll_matches_once
+from matches.services.watchability import compute_watchability
 
 logger = logging.getLogger(__name__)
 
@@ -282,5 +285,66 @@ def poll_matches_view(request):
             "teams": result.teams,
             "api_calls_used": result.api_calls_used,
             "duration_seconds": round(result.duration_seconds, 3),
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
+def recompute_watchability_view(request):
+    if not _is_authorized(request):
+        logger.warning(
+            "Internal recompute-watchability unauthorized ip=%s",
+            _get_client_ip(request),
+        )
+        return _unauthorized()
+    if not _rate_limit_ip(request, key_prefix="internal:recompute-watchability"):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
+
+    body = _parse_json_body(request)
+    days = _parse_int_param(
+        body.get("days") or request.POST.get("days") or request.GET.get("days")
+    )
+    days = max(int(days) if days is not None else 7, 0)
+
+    now = timezone.now()
+    end = now + timedelta(days=days)
+    start_time = time.monotonic()
+
+    matches = Match.objects.filter(date_time__gte=now, date_time__lte=end)
+    total = matches.count()
+    updated = 0
+
+    for match in matches:
+        result = compute_watchability(match.id)
+        match.watchability_score = result["watchability"]
+        match.watchability_confidence = result["confidence_label"]
+        match.watchability_updated_at = now
+        match.save(
+            update_fields=[
+                "watchability_score",
+                "watchability_confidence",
+                "watchability_updated_at",
+            ]
+        )
+        updated += 1
+
+    duration = time.monotonic() - start_time
+    logger.info(
+        "Internal recompute-watchability done updated=%s total=%s days=%s duration=%.3fs",
+        updated,
+        total,
+        days,
+        duration,
+    )
+    return JsonResponse(
+        {
+            "ok": True,
+            "updated": updated,
+            "total": total,
+            "days": days,
+            "date_from": now.isoformat(),
+            "date_to": end.isoformat(),
+            "duration_seconds": round(duration, 3),
         }
     )

@@ -13,6 +13,8 @@ export default function SiteHeader() {
   const pathname = usePathname();
 
   const isAppRoute =
+    pathname === '/home' ||
+    pathname.startsWith('/home/') ||
     pathname === '/feed' ||
     pathname.startsWith('/feed/') ||
     pathname === '/matches' ||
@@ -25,7 +27,8 @@ export default function SiteHeader() {
     pathname.startsWith('/query/') ||
     pathname === '/seed' ||
     pathname.startsWith('/seed/') ||
-    pathname.startsWith('/profile/');
+    pathname.startsWith('/profile/') ||
+    pathname.startsWith('/u/');
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -49,10 +52,10 @@ export default function SiteHeader() {
           {hasToken ? (
             <>
               <Link
-                href="/feed"
+                href="/home"
                 className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 transition hover:border-slate-500"
               >
-                Ir al feed
+                Ir a home
               </Link>
               <Link
                 href="/logout"

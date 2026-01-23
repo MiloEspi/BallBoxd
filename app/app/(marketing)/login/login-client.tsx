@@ -53,7 +53,7 @@ export default function LoginClient() {
         localStorage.setItem('auth_token', response.token);
         localStorage.setItem('auth_username', username);
       }
-      router.push('/feed');
+      router.push('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.');
     } finally {

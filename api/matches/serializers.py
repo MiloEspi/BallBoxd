@@ -95,6 +95,9 @@ class MatchSerializer(serializers.ModelSerializer):
             "status",
             "home_score",
             "away_score",
+            "watchability_score",
+            "watchability_confidence",
+            "watchability_updated_at",
         ]
 
 
@@ -198,6 +201,9 @@ class FeedMatchSerializer(serializers.ModelSerializer):
             "avg_score",
             "rating_count",
             "my_rating",
+            "watchability_score",
+            "watchability_confidence",
+            "watchability_updated_at",
         ]
 
     def get_my_rating(self, obj):

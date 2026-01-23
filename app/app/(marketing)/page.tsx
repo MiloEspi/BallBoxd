@@ -22,10 +22,10 @@ export default function Page() {
 
         <section className="flex flex-wrap gap-4">
           <Link
-            href="/feed"
+            href="/home"
             className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
           >
-            Entrar al feed
+            Entrar a home
           </Link>
           <Link
             href="/matches/placeholder"

@@ -1,7 +1,12 @@
 from rest_framework import serializers
 
 from core.serializers import UserMiniSerializer
-from matches.serializers import RatingWithMatchSerializer, TeamSerializer, TournamentSerializer
+from matches.serializers import (
+    RatingWithMatchSerializer,
+    TeamSerializer,
+    TeamSummarySerializer,
+    TournamentSerializer,
+)
 
 
 class ProfileStatsSerializer(serializers.Serializer):
@@ -62,3 +67,36 @@ class ProfileResponseSerializer(serializers.Serializer):
     user = UserMiniSerializer()
     stats = ProfileStatsSerializer()
     recent_activity = RatingWithMatchSerializer(many=True)
+
+
+class FriendFeedMatchSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    date_time = serializers.DateTimeField()
+    home_team = TeamSummarySerializer()
+    away_team = TeamSummarySerializer()
+
+
+class FriendsFeedItemSerializer(serializers.Serializer):
+    actor = UserMiniSerializer()
+    match = FriendFeedMatchSerializer()
+    rating_score = serializers.IntegerField()
+    review_snippet = serializers.CharField(allow_blank=True)
+    created_at = serializers.DateTimeField()
+
+
+class FriendsFeedResponseSerializer(serializers.Serializer):
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    total = serializers.IntegerField()
+    results = FriendsFeedItemSerializer(many=True)
+
+
+class PublicProfileRatingsResponseSerializer(serializers.Serializer):
+    user = UserMiniSerializer()
+    is_following = serializers.BooleanField()
+    stats = ProfileStatsSerializer()
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    total = serializers.IntegerField()
+    ratings = RatingWithMatchSerializer(many=True)

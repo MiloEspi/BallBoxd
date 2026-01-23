@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation';
 
 import { fetchSearch } from '@/app/lib/api';
-import type { MatchResult, SearchResponse, Team, League } from '@/app/lib/types';
+import type {
+  MatchResult,
+  SearchResponse,
+  Team,
+  League,
+  UserMini,
+} from '@/app/lib/types';
 
 type SearchItem = {
   id: string;
@@ -81,6 +87,14 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
       return [] as SearchItem[];
     }
     const list: SearchItem[] = [];
+    results.results.users.forEach((user: UserMini) => {
+      list.push({
+        id: `user-${user.id}`,
+        label: `@${user.username}`,
+        hint: 'Usuario',
+        href: `/u/${user.username}`,
+      });
+    });
     results.results.teams.forEach((team: Team) => {
       list.push({
         id: `team-${team.id}`,
@@ -137,7 +151,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
     <div ref={containerRef} className="relative w-full max-w-md">
       <input
         className="w-full rounded-full border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-400/60"
-        placeholder="Buscar equipos, ligas o partidos..."
+        placeholder="Buscar usuarios, equipos o partidos..."
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onFocus={() => query.trim() && setOpen(true)}
@@ -171,6 +185,22 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
 
           {!loading && !error && results && items.length > 0 && (
             <div className="space-y-4">
+              {results.results.users.length > 0 && (
+                <SearchGroup
+                  title="Usuarios"
+                  items={results.results.users.map((user) => ({
+                    id: `user-${user.id}`,
+                    label: `@${user.username}`,
+                    hint: 'Perfil',
+                    href: `/u/${user.username}`,
+                  }))}
+                  activeId={items[activeIndex]?.id}
+                  onSelect={(href) => {
+                    setOpen(false);
+                    router.push(href);
+                  }}
+                />
+              )}
               {results.results.teams.length > 0 && (
                 <SearchGroup
                   title="Equipos"

@@ -26,8 +26,8 @@ export default function SiteFooter() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
               Plataforma
             </p>
-            <Link href="/feed" className="block hover:text-slate-200">
-              Feed
+            <Link href="/home" className="block hover:text-slate-200">
+              Home
             </Link>
             <Link href="/matches" className="block hover:text-slate-200">
               Partidos

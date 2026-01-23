@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     FeedView,
+    FriendsFeedView,
     MeView,
     ProfileActivityView,
     ProfileHighlightsView,
@@ -10,17 +11,25 @@ from .views import (
     ProfileView,
     ProfileRatedMatchesView,
     ProfileMemoryDetailView,
+    PublicProfileView,
     SearchView,
     TeamDetailView,
     TeamMatchesView,
     TeamsView,
     TeamFollowView,
     UserFollowView,
+    UserFollowByUsernameView,
 )
 
 urlpatterns = [
     path("feed/", FeedView.as_view(), name="feed"),
+    path("feed/friends/", FriendsFeedView.as_view(), name="friends-feed"),
     path("profile/<str:username>/", ProfileView.as_view(), name="profile"),
+    path(
+        "users/<str:username>/public/",
+        PublicProfileView.as_view(),
+        name="public-profile",
+    ),
     path("search/", SearchView.as_view(), name="search"),
     path(
         "profile/<str:username>/stats/",
@@ -61,5 +70,10 @@ urlpatterns = [
     ),
     path("teams/<int:pk>/follow/", TeamFollowView.as_view(), name="team-follow"),
     path("users/<int:pk>/follow/", UserFollowView.as_view(), name="user-follow"),
+    path(
+        "users/<str:username>/follow/",
+        UserFollowByUsernameView.as_view(),
+        name="user-follow-username",
+    ),
     path("me/", MeView.as_view(), name="me"),
 ]

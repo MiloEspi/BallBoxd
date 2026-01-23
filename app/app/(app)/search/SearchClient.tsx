@@ -8,7 +8,13 @@ import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import { ApiError, fetchSearch } from '@/app/lib/api';
-import type { League, MatchResult, SearchResponse, Team } from '@/app/lib/types';
+import type {
+  League,
+  MatchResult,
+  SearchResponse,
+  Team,
+  UserMini,
+} from '@/app/lib/types';
 
 type ErrorState = {
   message: string;
@@ -17,16 +23,18 @@ type ErrorState = {
 
 const TABS = [
   { key: 'all', label: 'Todo' },
+  { key: 'users', label: 'Usuarios' },
   { key: 'teams', label: 'Equipos' },
   { key: 'leagues', label: 'Ligas' },
   { key: 'matches', label: 'Partidos' },
 ];
 
 const tabToTypes = (tab: string) => {
+  if (tab === 'users') return ['users'];
   if (tab === 'teams') return ['teams'];
   if (tab === 'leagues') return ['leagues'];
   if (tab === 'matches') return ['matches'];
-  return undefined;
+  return ['all'];
 };
 
 export default function SearchClient() {
@@ -89,6 +97,7 @@ export default function SearchClient() {
       return false;
     }
     return (
+      data.results.users.length > 0 ||
       data.results.teams.length > 0 ||
       data.results.leagues.length > 0 ||
       data.results.matches.length > 0
@@ -154,7 +163,7 @@ export default function SearchClient() {
       {!loading && !error && (!query || !data) && (
         <StateEmpty
           title="Ingresa una busqueda para ver resultados."
-          description="Podes buscar equipos, ligas o partidos."
+          description="Podes buscar usuarios, equipos, ligas o partidos."
         />
       )}
 
@@ -169,6 +178,29 @@ export default function SearchClient() {
 
       {!loading && !error && data && hasResults && (
         <div className="space-y-10">
+          {(tab === 'all' || tab === 'users') &&
+            data.results.users.length > 0 && (
+              <SearchSection
+                title="Usuarios"
+                items={data.results.users}
+                renderItem={(user: UserMini) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => router.push(`/u/${user.username}`)}
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left transition hover:border-slate-600"
+                  >
+                    <p className="text-base font-semibold text-white">
+                      @{user.username}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Usuario
+                    </p>
+                  </button>
+                )}
+              />
+            )}
+
           {(tab === 'all' || tab === 'teams') && data.results.teams.length > 0 && (
             <SearchSection
               title="Equipos"

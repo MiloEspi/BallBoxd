@@ -80,6 +80,9 @@ class Match(models.Model):
     status = models.CharField(max_length=20, blank=True, default="")
     home_score = models.PositiveSmallIntegerField(default=0)
     away_score = models.PositiveSmallIntegerField(default=0)
+    watchability_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    watchability_confidence = models.CharField(max_length=12, null=True, blank=True)
+    watchability_updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [

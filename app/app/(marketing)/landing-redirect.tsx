@@ -9,7 +9,7 @@ export default function LandingRedirect() {
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (token) {
-      router.replace('/feed');
+      router.replace('/home');
     }
   }, [router]);
 
