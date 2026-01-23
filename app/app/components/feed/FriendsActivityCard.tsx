@@ -6,6 +6,8 @@ import type { FriendsFeedItem } from '@/app/lib/types';
 
 type FriendsActivityCardProps = {
   item: FriendsFeedItem;
+  className?: string;
+  variant?: 'default' | 'compact';
 };
 
 const formatDate = (value: string) => {
@@ -35,12 +37,20 @@ const getInitials = (value: string) => {
 };
 
 // Compact activity card for friends feed.
-export default function FriendsActivityCard({ item }: FriendsActivityCardProps) {
+export default function FriendsActivityCard({
+  item,
+  className,
+  variant = 'default',
+}: FriendsActivityCardProps) {
   const action = item.review_snippet ? 'reseno' : 'califico';
   const initials = getInitials(item.actor.username);
+  const baseClass =
+    variant === 'compact'
+      ? 'rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-[0_14px_30px_rgba(0,0,0,0.24)]'
+      : 'rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.24)]';
 
   return (
-    <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.24)]">
+    <article className={[baseClass, className].filter(Boolean).join(' ')}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-xs font-semibold text-slate-200">

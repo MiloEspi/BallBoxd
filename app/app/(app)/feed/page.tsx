@@ -133,7 +133,7 @@ export default function Page() {
   const sortedMatches = useMemo(() => {
     return [...dayMatches].sort(
       (a, b) =>
-        new Date(a.date_time).getTime() - new Date(b.date_time).getTime(),
+        new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
     );
   }, [dayMatches]);
 
@@ -252,7 +252,7 @@ export default function Page() {
             <div className="md:hidden">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                  {statusLabel} · {ratingLabel}
+                  {statusLabel}  {ratingLabel}
                 </div>
                 <button
                   type="button"

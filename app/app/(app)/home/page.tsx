@@ -30,7 +30,7 @@ export default function Page() {
   const [friendsTotal, setFriendsTotal] = useState(0);
   const [teamMatches, setTeamMatches] = useState<Match[]>([]);
   const [matchFilter, setMatchFilter] = useState<'today' | 'week' | 'all'>(
-    'all',
+    'today',
   );
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState<ErrorState | null>(null);
@@ -127,20 +127,34 @@ export default function Page() {
 
   const filteredMatches = useMemo(() => {
     if (matchFilter === 'all') {
-      return teamMatches;
+      return [...teamMatches].sort(
+        (a, b) =>
+          new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
+      );
     }
     const today = startOfDay(new Date());
     if (matchFilter === 'today') {
-      return teamMatches.filter((match) => {
-        const matchDate = startOfDay(new Date(match.date_time));
-        return matchDate.getTime() === today.getTime();
-      });
+      return teamMatches
+        .filter((match) => {
+          const matchDate = startOfDay(new Date(match.date_time));
+          return matchDate.getTime() === today.getTime();
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.date_time).getTime() -
+            new Date(a.date_time).getTime(),
+        );
     }
     const weekEnd = addDays(today, 6);
-    return teamMatches.filter((match) => {
-      const matchDate = new Date(match.date_time);
-      return matchDate >= today && matchDate <= weekEnd;
-    });
+    return teamMatches
+      .filter((match) => {
+        const matchDate = new Date(match.date_time);
+        return matchDate >= today && matchDate <= weekEnd;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
+      );
   }, [matchFilter, teamMatches]);
 
   return (
@@ -219,12 +233,16 @@ export default function Page() {
 
         {!loading && !error && items.length > 0 && (
           <div className="space-y-4">
-            {items.map((item) => (
-              <FriendsActivityCard
-                key={`${item.actor.id}-${item.match.id}`}
-                item={item}
-              />
-            ))}
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {items.map((item) => (
+                <FriendsActivityCard
+                  key={`${item.actor.id}-${item.match.id}`}
+                  item={item}
+                  variant="compact"
+                  className="min-w-[260px] max-w-[280px] flex-shrink-0"
+                />
+              ))}
+            </div>
             {items.length < friendsTotal && (
               <button
                 type="button"
