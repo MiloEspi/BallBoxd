@@ -12,6 +12,7 @@ import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import { ApiError, fetchFeed, fetchFriendsFeed, fetchMe } from '@/app/lib/api';
 import type { FriendsFeedItem, Match } from '@/app/lib/types';
+import { addDays, startOfDay } from '@/app/lib/date-range';
 
 type ErrorState = {
   message: string;
@@ -25,7 +26,12 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
   const [profileLink, setProfileLink] = useState('');
+  const [friendsPage, setFriendsPage] = useState(1);
+  const [friendsTotal, setFriendsTotal] = useState(0);
   const [teamMatches, setTeamMatches] = useState<Match[]>([]);
+  const [matchFilter, setMatchFilter] = useState<'today' | 'week' | 'all'>(
+    'all',
+  );
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState<ErrorState | null>(null);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
@@ -34,12 +40,16 @@ export default function Page() {
     y: number;
   } | null>(null);
 
-  const loadFeed = async () => {
+  const loadFeed = async (page: number = 1) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchFriendsFeed(1, 20);
-      setItems(response.results);
+      const response = await fetchFriendsFeed(page, 20);
+      setFriendsTotal(response.total);
+      setFriendsPage(page);
+      setItems((prev) =>
+        page > 1 ? [...prev, ...response.results] : response.results,
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError({
@@ -107,13 +117,31 @@ export default function Page() {
     () => (
       <StateEmpty
         title="Tu feed de amigos esta vacio."
-        description="Segui usuarios para ver sus ratings recientes."
+        description="Segui a 2-3 amigos para ver sus ratings y reviews."
         actionLabel="Buscar amigos"
-        onAction={() => router.push('/search?tab=users')}
+        onAction={() => router.push('/amigos')}
       />
     ),
     [router],
   );
+
+  const filteredMatches = useMemo(() => {
+    if (matchFilter === 'all') {
+      return teamMatches;
+    }
+    const today = startOfDay(new Date());
+    if (matchFilter === 'today') {
+      return teamMatches.filter((match) => {
+        const matchDate = startOfDay(new Date(match.date_time));
+        return matchDate.getTime() === today.getTime();
+      });
+    }
+    const weekEnd = addDays(today, 6);
+    return teamMatches.filter((match) => {
+      const matchDate = new Date(match.date_time);
+      return matchDate >= today && matchDate <= weekEnd;
+    });
+  }, [matchFilter, teamMatches]);
 
   return (
     <section className="space-y-10">
@@ -169,22 +197,25 @@ export default function Page() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                   Comparte tu perfil
                 </p>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
-                    {profileLink}
-                  </span>
-                  <button
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
+                      {profileLink}
+                    </span>
+                    <button
                     type="button"
                     className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
-                    onClick={() => navigator.clipboard.writeText(profileLink)}
-                  >
-                    Copiar
-                  </button>
+                      onClick={() => navigator.clipboard.writeText(profileLink)}
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Mandalo por WhatsApp a tu grupo.
+                  </p>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
         {!loading && !error && items.length > 0 && (
           <div className="space-y-4">
@@ -194,6 +225,15 @@ export default function Page() {
                 item={item}
               />
             ))}
+            {items.length < friendsTotal && (
+              <button
+                type="button"
+                className="w-full rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
+                onClick={() => loadFeed(friendsPage + 1)}
+              >
+                Ver mas
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -213,6 +253,30 @@ export default function Page() {
           >
             Ver todo
           </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: 'today', label: 'Hoy' },
+            { key: 'week', label: 'Esta semana' },
+            { key: 'all', label: 'Todos' },
+          ].map((item) => {
+            const active = matchFilter === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setMatchFilter(item.key as typeof matchFilter)}
+                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                  active
+                    ? 'bg-white text-slate-900'
+                    : 'border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
         {teamLoading && (
@@ -235,7 +299,7 @@ export default function Page() {
           />
         )}
 
-        {!teamLoading && !teamError && teamMatches.length === 0 && (
+        {!teamLoading && !teamError && filteredMatches.length === 0 && (
           <StateEmpty
             title="Todavia no seguis equipos."
             description="Segui equipos para ver sus partidos aca."
@@ -244,9 +308,9 @@ export default function Page() {
           />
         )}
 
-        {!teamLoading && !teamError && teamMatches.length > 0 && (
+        {!teamLoading && !teamError && filteredMatches.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {teamMatches.slice(0, 6).map((match) => (
+            {filteredMatches.slice(0, 6).map((match) => (
               <MatchCard
                 key={match.id}
                 match={match}

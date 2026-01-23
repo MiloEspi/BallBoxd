@@ -170,6 +170,7 @@ class FriendsFeedView(APIView):
                         "date_time": rating.match.date_time,
                         "home_team": rating.match.home_team,
                         "away_team": rating.match.away_team,
+                        "tournament": rating.match.tournament.name,
                     },
                     "rating_score": rating.score,
                     "review_snippet": (rating.review or "")[:140],

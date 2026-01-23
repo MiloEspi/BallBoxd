@@ -113,6 +113,7 @@ export type FriendsFeedMatch = {
   date_time: string;
   home_team: TeamSummary;
   away_team: TeamSummary;
+  tournament: string;
 };
 
 export type FriendsFeedItem = {

@@ -267,12 +267,17 @@ export function fetchPublicProfile(
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('page_size', String(pageSize));
-  return authRequest<PublicProfileRatingsResponse>(
-    `/users/${username}/public?${params.toString()}`,
-    {
-      method: 'GET',
-    },
-  );
+  const path = `/users/${username}/public?${params.toString()}`;
+  return authRequest<PublicProfileRatingsResponse>(path, {
+    method: 'GET',
+  }).catch((err) => {
+    if (err instanceof ApiError && err.status === 401) {
+      return request<PublicProfileRatingsResponse>(path, {
+        method: 'GET',
+      });
+    }
+    throw err;
+  });
 }
 
 // Profile stats tab endpoint.

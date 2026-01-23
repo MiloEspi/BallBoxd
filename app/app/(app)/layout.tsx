@@ -1,4 +1,5 @@
 import DemoBanner from '@/app/components/ui/DemoBanner';
+import AppTopBar from '@/app/components/layout/AppTopBar';
 import MobileTopBar from '@/app/components/layout/MobileTopBar';
 import AppSidebar from '@/app/ui/app-sidebar';
 
@@ -10,6 +11,7 @@ export default function AppLayout({
 }) {
   return (
     <div className="w-full flex-1">
+      <AppTopBar />
       <MobileTopBar />
       <div className="mx-auto w-full max-w-6xl space-y-3 px-4 py-4 md:space-y-4 md:py-8">
         <DemoBanner />

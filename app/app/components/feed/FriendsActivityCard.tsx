@@ -17,33 +17,61 @@ const formatDate = (value: string) => {
   });
 };
 
+const timeAgo = (value: string) => {
+  const now = Date.now();
+  const timestamp = new Date(value).getTime();
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `hace ${days}d`;
+  if (hours > 0) return `hace ${hours}h`;
+  if (minutes > 0) return `hace ${minutes}m`;
+  return 'recien';
+};
+
+const getInitials = (value: string) => {
+  return value.slice(0, 2).toUpperCase();
+};
+
 // Compact activity card for friends feed.
 export default function FriendsActivityCard({ item }: FriendsActivityCardProps) {
+  const action = item.review_snippet ? 'reseno' : 'califico';
+  const initials = getInitials(item.actor.username);
+
   return (
     <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.24)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
-            href={`/u/${item.actor.username}`}
-            className="text-sm font-semibold text-white hover:underline"
-          >
-            @{item.actor.username}
-          </Link>
-          <p className="mt-1 text-xs text-slate-400">
-            {formatDate(item.created_at)}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-xs font-semibold text-slate-200">
+            {initials}
+          </div>
+          <div>
+            <Link
+              href={`/u/${item.actor.username}`}
+              className="text-sm font-semibold text-white hover:underline"
+            >
+              @{item.actor.username}
+            </Link>
+            <p className="mt-1 text-xs text-slate-400">
+              {action} un partido - {timeAgo(item.created_at)}
+            </p>
+          </div>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-base font-semibold text-white">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/80 text-lg font-semibold text-white">
           {item.rating_score}
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+          {item.match.tournament}
+        </p>
         <Link
           href={`/matches/${item.match.id}`}
-          className="text-base font-semibold text-white hover:underline"
+          className="mt-2 block text-base font-semibold text-white hover:underline"
         >
-          {item.match.title}
+          {item.match.home_team.name} vs {item.match.away_team.name}
         </Link>
         <p className="mt-1 text-xs text-slate-500">
           {formatDate(item.match.date_time)}
@@ -51,8 +79,19 @@ export default function FriendsActivityCard({ item }: FriendsActivityCardProps) 
       </div>
 
       {item.review_snippet && (
-        <p className="mt-3 text-sm text-slate-300">{item.review_snippet}</p>
+        <p className="mt-3 text-sm text-slate-300">
+          {item.review_snippet}
+        </p>
       )}
+
+      <div className="mt-4 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+        <Link
+          href={`/matches/${item.match.id}`}
+          className="rounded-full border border-slate-700 px-3 py-1 text-slate-200 transition hover:border-slate-500"
+        >
+          Ver partido
+        </Link>
+      </div>
     </article>
   );
 }

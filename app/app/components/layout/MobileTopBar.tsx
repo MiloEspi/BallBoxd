@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MagnifyingGlassIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import useProfileHref from '@/app/lib/use-profile-href';
+import GlobalSearch from '@/app/components/search/GlobalSearch';
 
 type NavItem = {
   href: string;
@@ -43,7 +44,7 @@ export default function MobileTopBar() {
 
   return (
     <>
-      <div className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur md:hidden">
+      <div className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[linear-gradient(140deg,_rgba(2,6,23,0.95),_rgba(15,23,42,0.92))] shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur md:hidden">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="flex h-12 items-center justify-between gap-3">
             <Link
@@ -115,6 +116,12 @@ export default function MobileTopBar() {
               );
             })}
           </nav>
+
+          {!pathname.startsWith('/search') && (
+            <div className="pb-3">
+              <GlobalSearch />
+            </div>
+          )}
         </div>
       </div>
 

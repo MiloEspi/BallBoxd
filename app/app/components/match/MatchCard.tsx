@@ -73,7 +73,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
   const hasWatchability =
     match.watchability_score !== null && match.watchability_score !== undefined;
   const watchabilityLabel = hasWatchability
-    ? `W ${match.watchability_score}`
+    ? `Watch ${match.watchability_score}`
     : null;
   const watchabilityConfidence =
     hasWatchability && match.watchability_confidence
@@ -209,13 +209,26 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
             });
           }}
         >
-          {match.my_rating ? 'Update rating' : 'Rate match'}
+          {match.my_rating ? 'Editar' : 'Rankear'}
         </button>
         {hasWatchability && (
-          <span className="rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200">
-            {watchabilityLabel}
-            {watchabilityConfidence ? ` | ${watchabilityConfidence}` : ''}
-          </span>
+          <div className="group relative flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200">
+            <span>
+              {watchabilityLabel}
+              {watchabilityConfidence ? ` | ${watchabilityConfidence}` : ''}
+            </span>
+            <span
+              className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-500/70 bg-slate-950/80 text-[9px] font-bold text-slate-200"
+              title="Watchability estima que tan atractivo sera el partido (0-100). Confidence indica que tan confiable es la prediccion segun historial reciente."
+              aria-label="Info: watchability"
+            >
+              i
+            </span>
+            <div className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] hidden w-56 rounded-xl border border-slate-700/80 bg-slate-950/95 p-2 text-[10px] font-medium normal-case text-slate-200 shadow-[0_12px_30px_rgba(0,0,0,0.45)] group-hover:block">
+              Watchability (0-100) estima que tan atractivo sera el partido.
+              Confidence indica que tan confiable es la prediccion segun historial reciente.
+            </div>
+          </div>
         )}
       </div>
     </article>

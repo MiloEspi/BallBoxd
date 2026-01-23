@@ -130,7 +130,7 @@ export default function SearchClient() {
 
   return (
     <section className="space-y-8">
-      <header className="sticky top-14 z-20 -mx-2 rounded-2xl border border-slate-800/70 bg-slate-950/95 px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur md:top-6">
+      <header className="sticky top-14 z-20 -mx-2 rounded-2xl border border-slate-800/70 bg-slate-950/95 px-4 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur md:hidden">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3 rounded-full border border-slate-700/70 bg-slate-900/70 px-4 py-2">
             <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />

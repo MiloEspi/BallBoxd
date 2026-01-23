@@ -63,6 +63,9 @@ export async function GET(request: Request) {
       }
       const home = toTeam(store, match.homeTeamId);
       const away = toTeam(store, match.awayTeamId);
+      const tournament =
+        store.tournaments.find((item) => item.id === match.tournamentId)?.name ??
+        '';
       return {
         actor: toUserMini(actorUser),
         match: {
@@ -71,6 +74,7 @@ export async function GET(request: Request) {
           date_time: match.date_time,
           home_team: home,
           away_team: away,
+          tournament,
         },
         rating_score: rating.score,
         review_snippet: rating.review.slice(0, 140),

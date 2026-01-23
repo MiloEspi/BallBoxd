@@ -47,6 +47,7 @@ export default function Page() {
   const [page, setPage] = useState(1);
   const [isOwner, setIsOwner] = useState(false);
   const [followState, setFollowState] = useState<FollowStateResponse | null>(null);
+  const [followError, setFollowError] = useState<string | null>(null);
 
   const loadProfile = async () => {
     if (!username) {
@@ -122,6 +123,7 @@ export default function Page() {
     if (!username || isOwner) {
       return;
     }
+    setFollowError(null);
     try {
       const response = followState?.is_following
         ? await unfollowUser(username)
@@ -140,8 +142,12 @@ export default function Page() {
             }
           : prev,
       );
-    } catch {
-      // Ignore follow errors for now.
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setFollowError('Inicia sesion para seguir usuarios.');
+        return;
+      }
+      setFollowError('No pudimos actualizar el follow.');
     }
   };
 
@@ -171,6 +177,9 @@ export default function Page() {
             </button>
           )}
         </div>
+        {followError && (
+          <p className="text-xs text-rose-200">{followError}</p>
+        )}
         <p className="text-sm text-slate-400">Perfil publico.</p>
       </header>
 

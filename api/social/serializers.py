@@ -75,6 +75,7 @@ class FriendFeedMatchSerializer(serializers.Serializer):
     date_time = serializers.DateTimeField()
     home_team = TeamSummarySerializer()
     away_team = TeamSummarySerializer()
+    tournament = serializers.CharField()
 
 
 class FriendsFeedItemSerializer(serializers.Serializer):
