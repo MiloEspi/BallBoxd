@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import StadiumPhotoModal from '@/app/components/match/StadiumPhotoModal';
 import { updateMatchMemory } from '@/app/lib/api';
 import type { Rating } from '@/app/lib/types';
@@ -20,6 +21,7 @@ export default function MatchMemoryPanel({
   onRequireRating,
   onUpdated,
 }: MatchMemoryPanelProps) {
+  const { t } = useLanguage();
   const [attended, setAttended] = useState(Boolean(rating?.attended));
   const [photo, setPhoto] = useState(rating?.stadium_photo_url ?? '');
   const [saving, setSaving] = useState(false);
@@ -45,7 +47,7 @@ export default function MatchMemoryPanel({
       await updateMatchMemory(matchId, { attended: nextValue });
       onUpdated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+      setError(err instanceof Error ? err.message : t('common.saveError'));
       setAttended(attended);
     } finally {
       setSaving(false);
@@ -64,7 +66,7 @@ export default function MatchMemoryPanel({
       setPhoto('');
       onUpdated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+      setError(err instanceof Error ? err.message : t('common.saveError'));
     } finally {
       setSaving(false);
     }
@@ -74,7 +76,7 @@ export default function MatchMemoryPanel({
     <div className="space-y-2">
       <label className="flex items-center justify-between gap-4">
         <span className="text-[11px] uppercase tracking-[0.25em] text-slate-400">
-          Estuve en la cancha
+          {t('memory.attended')}
         </span>
         <input
           type="checkbox"
@@ -96,7 +98,7 @@ export default function MatchMemoryPanel({
               >
                 <img
                   src={photo}
-                  alt="Foto desde la cancha"
+                  alt={t('memory.photoAlt')}
                   className="h-full w-full object-cover"
                 />
               </button>
@@ -107,7 +109,7 @@ export default function MatchMemoryPanel({
               onClick={() => setUploadOpen(true)}
               disabled={saving}
             >
-              {photo ? 'Cambiar foto' : 'Subir foto'}
+              {photo ? t('memory.changePhoto') : t('memory.uploadPhoto')}
             </button>
           </div>
           {photo && (
@@ -117,7 +119,7 @@ export default function MatchMemoryPanel({
               onClick={handlePhotoClear}
               disabled={saving}
             >
-              Quitar
+              {t('memory.remove')}
             </button>
           )}
         </div>
@@ -148,7 +150,7 @@ export default function MatchMemoryPanel({
             setPhoto(value);
             onUpdated();
           } catch (err) {
-            setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+            setError(err instanceof Error ? err.message : t('common.saveError'));
           } finally {
             setSaving(false);
           }
@@ -166,7 +168,7 @@ export default function MatchMemoryPanel({
           >
             <img
               src={photo}
-              alt="Foto desde la cancha"
+              alt={t('memory.photoAlt')}
               className="h-full w-full rounded-2xl object-cover shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
             />
             <button
@@ -174,7 +176,7 @@ export default function MatchMemoryPanel({
               type="button"
               onClick={() => setPreviewOpen(false)}
             >
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
         </div>

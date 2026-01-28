@@ -1,6 +1,12 @@
+'use client';
+
 import Link from 'next/link';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
+
 export default function SiteFooter() {
+  const { t } = useLanguage();
+
   return (
     <footer className="border-t border-slate-800/80">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10 md:flex-row md:items-start md:justify-between">
@@ -12,37 +18,43 @@ export default function SiteFooter() {
             <div>
               <p className="text-sm font-semibold text-white">BallBoxd</p>
               <p className="text-xs text-slate-400">
-                Recuerdos compartidos del futbol.
+                {t('home.subtitle')}
               </p>
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            Calle Falsa 123, Buenos Aires, Argentina
+            {t('footer.address')}
           </p>
         </div>
 
         <div className="grid gap-8 text-sm text-slate-400 md:grid-cols-2">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-              Plataforma
+              {t('nav.panel')}
             </p>
             <Link href="/home" className="block hover:text-slate-200">
-              Home
+              {t('nav.home')}
             </Link>
             <Link href="/matches" className="block hover:text-slate-200">
-              Partidos
+              {t('nav.matches')}
             </Link>
             <Link href="/login" className="block hover:text-slate-200">
-              Iniciar sesion
+              {t('nav.login')}
             </Link>
           </div>
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-              Redes
+              {t('footer.social.title')}
             </p>
-            <span className="block text-slate-500">Instagram</span>
-            <span className="block text-slate-500">X / Twitter</span>
-            <span className="block text-slate-500">TikTok</span>
+            <span className="block text-slate-500">
+              {t('footer.social.instagram')}
+            </span>
+            <span className="block text-slate-500">
+              {t('footer.social.twitter')}
+            </span>
+            <span className="block text-slate-500">
+              {t('footer.social.tiktok')}
+            </span>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import MatchCard from '@/app/components/match/MatchCard';
 import MatchesToolbar from '@/app/components/match/MatchesToolbar';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
@@ -11,18 +12,15 @@ import PaginationControls from '@/app/components/ui/PaginationControls';
 import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import { fetchMatches } from '@/app/lib/api';
-import {
-  addDays,
-  isSameDay,
-  startOfDay,
-} from '@/app/lib/date-range';
+import { addDays, isSameDay, startOfDay } from '@/app/lib/date-range';
+import { getLocale } from '@/app/lib/i18n';
 import { readLeaguePreferences, saveLeaguePreferences } from '@/app/lib/league-preferences';
 import { getStatusMeta } from '@/app/lib/match-ui';
 import type { Match } from '@/app/lib/types';
 
 // Formats the date label for the calendar pill.
-const formatDateLabel = (date: Date) => {
-  return date.toLocaleDateString('es-ES', {
+const formatDateLabel = (date: Date, locale: string) => {
+  return date.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -41,15 +39,15 @@ const getLeagueOptions = (matches: Match[]) => {
       });
     }
   });
-  return Array.from(map.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
 // Matches listing page with date + league filters.
 export default function MatchesClient() {
   const searchParams = useSearchParams();
   const tournamentParam = searchParams.get('tournament');
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -84,7 +82,7 @@ export default function MatchesClient() {
       );
       setMatches(data.results);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load matches.');
+      setError(err instanceof Error ? err.message : t('common.loadError'));
     } finally {
       setLoading(false);
     }
@@ -112,7 +110,7 @@ export default function MatchesClient() {
       setSelectedLeague(String(tournamentId));
       setSelectedDate(today);
     }
-  }, [matches, tournamentParam]);
+  }, [matches, tournamentParam, today]);
 
   useEffect(() => {
     setTransitionPhase('fadeOut');
@@ -139,8 +137,8 @@ export default function MatchesClient() {
   const leagueOptions = useMemo(() => getLeagueOptions(matches), [matches]);
   const leagueDropdownOptions = useMemo(() => {
     const base = [
-      { value: 'ALL', label: 'All leagues' },
-      { value: 'MY', label: 'My leagues' },
+      { value: 'ALL', label: t('matches.toolbar.status.all') },
+      { value: 'MY', label: t('matches.toolbar.myLeagues') },
     ];
     return [
       ...base,
@@ -150,7 +148,7 @@ export default function MatchesClient() {
         subtitle: league.country ?? undefined,
       })),
     ];
-  }, [leagueOptions]);
+  }, [leagueOptions, t]);
 
   useEffect(() => {
     if (!prefsLoaded || hasStoredPrefs) {
@@ -243,22 +241,22 @@ export default function MatchesClient() {
 
   const selectedLeagueLabel =
     leagueDropdownOptions.find((option) => option.value === selectedLeague)
-      ?.label ?? 'All leagues';
+      ?.label ?? t('matches.toolbar.status.all');
   const selectedStatusLabel =
     selectedStatus === 'ALL'
-      ? 'Todo'
+      ? t('matches.toolbar.status.all')
       : selectedStatus === 'LIVE'
-        ? 'Live'
+        ? t('matches.toolbar.status.live')
         : selectedStatus === 'FINISHED'
-          ? 'Finished'
-          : 'Upcoming';
-  const showingLabel = `${formatDateLabel(selectedDate)} · ${selectedLeagueLabel} · ${selectedStatusLabel}`;
+          ? t('matches.toolbar.status.finished')
+          : t('matches.toolbar.status.pending');
+  const showingLabel = `${formatDateLabel(selectedDate, locale)} · ${selectedLeagueLabel} · ${selectedStatusLabel}`;
 
   return (
     <section className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Partidos</h1>
-        <p className="text-sm text-slate-400">Explorá partidos por fecha y liga.</p>
+        <h1 className="text-2xl font-semibold">{t('matches.title')}</h1>
+        <p className="text-sm text-slate-400">{t('matches.subtitle')}</p>
       </header>
 
       <MatchesToolbar
@@ -281,10 +279,9 @@ export default function MatchesClient() {
         }}
       />
 
-
       {loading && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          Loading matches...
+          {t('matches.loading')}
         </div>
       )}
 
@@ -296,15 +293,15 @@ export default function MatchesClient() {
             type="button"
             onClick={loadMatches}
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       )}
 
       {!loading && !error && filteredMatches.length === 0 && (
         <StateEmpty
-          title="No matches on this day for selected leagues."
-          actionLabel="Clear filters"
+          title={t('matches.emptyTitle')}
+          actionLabel={t('matches.toolbar.clear')}
           onAction={() => {
             setSelectedLeague('ALL');
             setSelectedStatus('ALL');
@@ -317,8 +314,13 @@ export default function MatchesClient() {
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-[0.25em] text-slate-500">
             <span>{showingLabel}</span>
             <span>
-              Page {currentPage} / {totalPages} - {rangeStart}-{rangeEnd} of{' '}
-              {totalItems}
+              {t('matches.toolbar.page', {
+                current: currentPage,
+                total: totalPages,
+                start: rangeStart,
+                end: rangeEnd,
+                totalItems,
+              })}
             </span>
           </div>
           {transitionPhase === 'skeleton' ? (
@@ -363,13 +365,15 @@ export default function MatchesClient() {
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-[0_25px_70px_rgba(0,0,0,0.6)]">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">Manage leagues</h3>
+              <h3 className="text-lg font-semibold text-white">
+                {t('matches.toolbar.manage')}
+              </h3>
               <button
                 type="button"
                 className="text-xs uppercase tracking-[0.2em] text-slate-400"
                 onClick={() => setShowManageLeagues(false)}
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
             <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
@@ -405,14 +409,14 @@ export default function MatchesClient() {
                 className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
                 onClick={() => setMyLeagues(leagueOptions.map((l) => l.id))}
               >
-                Select all
+                {t('common.selectAll')}
               </button>
               <button
                 type="button"
                 className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-slate-200"
                 onClick={() => setShowManageLeagues(false)}
               >
-                Done
+                {t('common.done')}
               </button>
             </div>
           </div>

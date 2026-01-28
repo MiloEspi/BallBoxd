@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import { processSquareImage } from '@/app/lib/image';
 
 type ImageUploadProps = {
@@ -30,6 +31,7 @@ export default function ImageUpload({
   previewClassName,
   onPendingChange,
 }: ImageUploadProps) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -50,7 +52,7 @@ export default function ImageUpload({
       return;
     }
     if (!acceptedTypes.includes(file.type)) {
-      setError('Please upload a JPG or PNG image.');
+      setError(t('image.upload.formatError'));
       event.target.value = '';
       return;
     }
@@ -62,10 +64,10 @@ export default function ImageUpload({
       onPendingChange?.(false);
     } catch (err) {
       if (err instanceof Error && err.message.includes('Minimo')) {
-        setError(`Image too small. Minimum size is ${minSize}x${minSize}.`);
+        setError(t('image.upload.tooSmall', { size: minSize }));
       } else {
         setError(
-          err instanceof Error ? err.message : 'No pudimos cargar la imagen.',
+          err instanceof Error ? err.message : t('image.upload.error'),
         );
       }
     } finally {
@@ -91,7 +93,7 @@ export default function ImageUpload({
               onClick={onClear}
               disabled={disabled}
             >
-              Quitar
+              {t('image.upload.remove')}
             </button>
           )}
           <button
@@ -100,7 +102,11 @@ export default function ImageUpload({
             onClick={handlePick}
             disabled={disabled || processing}
           >
-            {processing ? 'Procesando...' : value ? 'Cambiar' : 'Subir'}
+            {processing
+              ? t('image.upload.processing')
+              : value
+                ? t('image.upload.change')
+                : t('image.upload.upload')}
           </button>
         </div>
       </div>
@@ -116,7 +122,7 @@ export default function ImageUpload({
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-500">
-            1:1 - {minSize}px minimo
+            {t('image.upload.minLabel', { size: minSize })}
           </div>
         )}
       </div>

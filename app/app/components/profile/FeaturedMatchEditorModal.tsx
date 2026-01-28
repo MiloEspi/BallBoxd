@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import ImageUpload from '@/app/components/ui/ImageUpload';
 import { updateProfileMemory } from '@/app/lib/api';
 import type { RatingWithMatch } from '@/app/lib/types';
@@ -23,6 +24,7 @@ export default function FeaturedMatchEditorModal({
   onClose,
   onSaved,
 }: FeaturedMatchEditorModalProps) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [note, setNote] = useState(rating.featured_note ?? '');
   const [representative, setRepresentative] = useState(
@@ -35,11 +37,11 @@ export default function FeaturedMatchEditorModal({
   const handleSave = async () => {
     setError('');
     if (!representative) {
-      setError('La imagen destacada es obligatoria.');
+      setError(t('profile.memories.editor.required'));
       return;
     }
     if (hasPending) {
-      setError('Confirma la imagen antes de guardar.');
+      setError(t('profile.memories.editor.pending'));
       return;
     }
     setSaving(true);
@@ -52,7 +54,7 @@ export default function FeaturedMatchEditorModal({
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+      setError(err instanceof Error ? err.message : t('common.saveError'));
     } finally {
       setSaving(false);
     }
@@ -101,7 +103,7 @@ export default function FeaturedMatchEditorModal({
           <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                Mis partidos
+                {t('profile.memories.selector.title')}
               </p>
               <h2 className="text-lg font-semibold text-white">
                 {rating.match.home_team.name} vs {rating.match.away_team.name}
@@ -111,8 +113,8 @@ export default function FeaturedMatchEditorModal({
               className="text-sm text-slate-500 transition hover:text-slate-200"
               type="button"
               onClick={onClose}
-              aria-label="Cerrar"
-              title="Cerrar"
+              aria-label={t('common.close')}
+              title={t('common.close')}
             >
               X
             </button>
@@ -121,14 +123,14 @@ export default function FeaturedMatchEditorModal({
           <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 py-6">
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Por que este partido es especial para vos
+                {t('profile.memories.editor.prompt')}
               </label>
               <textarea
                 className="min-h-[120px] w-full rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
                 maxLength={240}
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="Opcional. Podes dejarlo vacio."
+                placeholder={t('profile.memories.editor.placeholder')}
               />
               <div className="text-right text-xs text-slate-500">
                 {note.length}/240
@@ -136,11 +138,11 @@ export default function FeaturedMatchEditorModal({
             </div>
 
             <ImageUpload
-              label="Imagen destacada (obligatoria)"
-              helper="La imagen que representa el partido en tu perfil."
+              label={t('profile.memories.editor.imageLabel')}
+              helper={t('profile.memories.editor.imageHelper')}
               suggestions={[
-                'Choose an image that represents what this match means to you.',
-                'Recortes cuadrados funcionan mejor.',
+                t('profile.memories.editor.suggestion1'),
+                t('profile.memories.editor.suggestion2'),
               ]}
               value={representative}
               onChange={(value) => {
@@ -169,7 +171,7 @@ export default function FeaturedMatchEditorModal({
               onClick={onClose}
               disabled={saving}
             >
-              Cancelar
+              {t('profile.memories.editor.cancel')}
             </button>
             <button
               className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
@@ -177,7 +179,7 @@ export default function FeaturedMatchEditorModal({
               onClick={handleSave}
               disabled={saving || hasPending}
             >
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? t('profile.memories.editor.saving') : t('profile.memories.editor.save')}
             </button>
           </div>
         </div>

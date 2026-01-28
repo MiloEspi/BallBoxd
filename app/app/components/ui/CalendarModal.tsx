@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import { isSameDay, startOfDay } from '@/app/lib/date-range';
+import { getLocale } from '@/app/lib/i18n';
 
 type CalendarModalProps = {
   open: boolean;
@@ -11,7 +13,8 @@ type CalendarModalProps = {
   onClose: () => void;
 };
 
-const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const weekdayLabelsByLanguage = (language: 'en' | 'es') =>
+  language === 'es' ? ['L', 'M', 'X', 'J', 'V', 'S', 'D'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const getMonthStart = (value: Date) =>
   new Date(value.getFullYear(), value.getMonth(), 1);
@@ -28,6 +31,8 @@ export default function CalendarModal({
   onSelect,
   onClose,
 }: CalendarModalProps) {
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const [month, setMonth] = useState(() => getMonthStart(selected));
 
   useEffect(() => {
@@ -56,10 +61,11 @@ export default function CalendarModal({
     return null;
   }
 
-  const monthLabel = month.toLocaleDateString('es-ES', {
+  const monthLabel = month.toLocaleDateString(locale, {
     month: 'long',
     year: 'numeric',
   });
+  const weekdayLabels = weekdayLabelsByLanguage(language);
 
   return (
     <div
@@ -71,7 +77,7 @@ export default function CalendarModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Seleccionar fecha"
+      aria-label={t('calendar.selectDate')}
     >
       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-[0_25px_70px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between gap-3">
@@ -81,13 +87,13 @@ export default function CalendarModal({
             onClick={() =>
               setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
             }
-            aria-label="Mes anterior"
+            aria-label={t('calendar.prevMonth')}
           >
             {'<'}
           </button>
           <div className="min-w-0 text-center">
             <div className="text-xs uppercase tracking-[0.25em] text-slate-400">
-              Calendario
+              {t('calendar.title')}
             </div>
             <div className="truncate text-base font-semibold text-white">
               {monthLabel}
@@ -99,7 +105,7 @@ export default function CalendarModal({
             onClick={() =>
               setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
             }
-            aria-label="Mes siguiente"
+            aria-label={t('calendar.nextMonth')}
           >
             {'>'}
           </button>
@@ -153,14 +159,14 @@ export default function CalendarModal({
               onClose();
             }}
           >
-            Hoy
+            {t('calendar.today')}
           </button>
           <button
             type="button"
             className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-slate-200"
             onClick={onClose}
           >
-            Cerrar
+            {t('calendar.close')}
           </button>
         </div>
       </div>

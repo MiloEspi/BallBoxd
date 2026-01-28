@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import {
   ApiError,
   fetchMe,
+  fetchPublicProfile,
   fetchSearch,
   followUser,
   unfollowUser,
@@ -24,6 +26,7 @@ type ErrorState = {
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,12 +68,12 @@ export default function Page() {
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setError({
-            message: 'Inicia sesion para buscar amigos.',
+            message: t('friends.search.login'),
             action: 'login',
           });
         } else {
           setError({
-            message: 'No pudimos cargar los resultados.',
+            message: t('friends.search.error'),
             action: 'retry',
           });
         }
@@ -79,7 +82,40 @@ export default function Page() {
       }
     }, 250);
     return () => window.clearTimeout(handle);
-  }, [query, retryKey]);
+  }, [query, retryKey, t]);
+
+  useEffect(() => {
+    if (!data?.results.users.length) {
+      return;
+    }
+    let cancelled = false;
+    const loadFollowState = async () => {
+      const entries = await Promise.all(
+        data.results.users.map(async (user) => {
+          try {
+            const response = await fetchPublicProfile(user.username, 1, 1);
+            return [user.username, Boolean(response?.is_following)] as const;
+          } catch {
+            return [user.username, false] as const;
+          }
+        }),
+      );
+      if (cancelled) {
+        return;
+      }
+      setFollowed((prev) => {
+        const next = { ...prev };
+        entries.forEach(([username, isFollowing]) => {
+          next[username] = isFollowing;
+        });
+        return next;
+      });
+    };
+    loadFollowState();
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
 
   const handleFollow = async (username: string, isFollowing: boolean) => {
     try {
@@ -97,18 +133,16 @@ export default function Page() {
   return (
     <section className="space-y-8">
       <header className="space-y-3">
-        <h1 className="text-2xl font-semibold">Buscar amigos</h1>
-        <p className="text-sm text-slate-400">
-          Segui a 2-3 amigos para ver sus ratings y reviews.
-        </p>
+        <h1 className="text-2xl font-semibold">{t('friends.search.title')}</h1>
+        <p className="text-sm text-slate-400">{t('friends.search.subtitle')}</p>
         <div className="flex items-center gap-3 rounded-full border border-slate-700/70 bg-slate-900/70 px-4 py-2">
           <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
           <input
             className="w-full bg-transparent text-sm text-slate-100 outline-none"
-            placeholder="Buscar usuarios por username..."
+            placeholder={t('friends.search.placeholder')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="Buscar usuarios"
+            aria-label={t('friends.search.title')}
           />
         </div>
       </header>
@@ -124,7 +158,7 @@ export default function Page() {
       {!loading && error && (
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login'
               ? () => router.push('/login')
@@ -135,15 +169,15 @@ export default function Page() {
 
       {!loading && !error && !data && (
         <StateEmpty
-          title="Escribi un nombre para buscar."
-          description="Podes compartir tu perfil para que te encuentren mas rapido."
+          title={t('friends.search.emptyTitle')}
+          description={t('friends.search.emptyDesc')}
         />
       )}
 
       {!loading && !error && data && data.results.users.length === 0 && (
         <StateEmpty
-          title={`Sin resultados para "${data.q}".`}
-          description="Proba con otro username."
+          title={t('friends.search.noResults', { query: data.q })}
+          description={t('friends.search.noResultsDesc')}
         />
       )}
 
@@ -171,7 +205,7 @@ export default function Page() {
                   }`}
                   onClick={() => handleFollow(user.username, isFollowing)}
                 >
-                  {isFollowing ? 'Siguiendo' : 'Seguir'}
+                  {isFollowing ? t('common.following') : t('common.follow')}
                 </button>
               </div>
             );
@@ -182,7 +216,7 @@ export default function Page() {
       {profileLink && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Compartir mi perfil
+            {t('friends.search.shareTitle')}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
@@ -193,11 +227,11 @@ export default function Page() {
               className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
               onClick={() => navigator.clipboard.writeText(profileLink)}
             >
-              Copiar
+              {t('home.share.copy')}
             </button>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Mandalo por WhatsApp a tu grupo.
+            {t('friends.search.shareCaption')}
           </p>
         </div>
       )}

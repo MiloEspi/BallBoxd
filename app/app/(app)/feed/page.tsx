@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon } from '@heroicons/react/24/outline';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import MatchCard from '@/app/components/match/MatchCard';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
 import CalendarModal from '@/app/components/ui/CalendarModal';
@@ -19,6 +20,7 @@ import {
   isSameDay,
   startOfDay,
 } from '@/app/lib/date-range';
+import { getLocale } from '@/app/lib/i18n';
 import { getStatusMeta } from '@/app/lib/match-ui';
 import type { Match } from '@/app/lib/types';
 import SegmentedControl from '@/app/ui/segmented-control';
@@ -33,6 +35,8 @@ type TransitionPhase = 'idle' | 'fadeOut' | 'fadeIn';
 // Feed page showing recent matches from followed teams.
 export default function Page() {
   const router = useRouter();
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
@@ -60,12 +64,12 @@ export default function Page() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError({
-          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          message: t('common.sessionExpired'),
           action: 'login',
         });
       } else {
         setError({
-          message: 'No pudimos cargar los datos.',
+          message: t('common.loadError'),
           action: 'retry',
         });
       }
@@ -93,14 +97,14 @@ export default function Page() {
   }, [selectedDay, selectedStatus, selectedRating]);
 
   const statusOptions = [
-    { value: 'ALL', label: 'All' },
-    { value: 'LIVE', label: 'Live' },
-    { value: 'FINISHED', label: 'Finished' },
+    { value: 'ALL', label: t('feed.status.all') },
+    { value: 'LIVE', label: t('status.live') },
+    { value: 'FINISHED', label: t('status.finished') },
   ];
   const ratingOptions = [
-    { value: 'ALL', label: 'All' },
-    { value: 'RATED', label: 'Rated' },
-    { value: 'UNRATED', label: 'Unrated' },
+    { value: 'ALL', label: t('feed.status.all') },
+    { value: 'RATED', label: t('feed.status.rated') },
+    { value: 'UNRATED', label: t('feed.status.unrated') },
   ];
 
   const statusRatingMatches = useMemo(() => {
@@ -154,51 +158,49 @@ export default function Page() {
     return counts;
   }, [statusRatingMatches]);
 
-  const selectedDayLabel = getRelativeDayLabel(selectedDay, today);
-  const selectedDayFull = selectedDay.toLocaleDateString('en-US', {
+  const selectedDayLabel = getRelativeDayLabel(selectedDay, today, language);
+  const selectedDayFull = selectedDay.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 
   const emptyTitle = useMemo(() => {
-    if (selectedDayLabel === 'Today') {
-      return 'No matches today.';
+    if (selectedDayLabel === t('date.today')) {
+      return t('feed.day.empty.today');
     }
-    if (selectedDayLabel === 'Yesterday') {
-      return 'No matches yesterday.';
+    if (selectedDayLabel === t('date.yesterday')) {
+      return t('feed.day.empty.yesterday');
     }
-    if (selectedDayLabel === 'Tomorrow') {
-      return 'No matches tomorrow.';
+    if (selectedDayLabel === t('date.tomorrow')) {
+      return t('feed.day.empty.tomorrow');
     }
-    return `No matches on ${selectedDayFull}.`;
-  }, [selectedDayFull, selectedDayLabel]);
+    return t('feed.day.empty.other', { date: selectedDayFull });
+  }, [selectedDayFull, selectedDayLabel, t]);
 
   const matchCountLabel =
     sortedMatches.length === 1
-      ? '1 match'
-      : `${sortedMatches.length} matches`;
+      ? t('feed.count.single')
+      : t('feed.count.multi', { count: sortedMatches.length });
 
   const statusLabel =
     selectedStatus === 'ALL'
-      ? 'All'
+      ? t('feed.status.all')
       : selectedStatus === 'LIVE'
-        ? 'Live'
-        : 'Finished';
+        ? t('status.live')
+        : t('status.finished');
   const ratingLabel =
     selectedRating === 'ALL'
-      ? 'All'
+      ? t('feed.status.all')
       : selectedRating === 'UNRATED'
-        ? 'Unrated'
-        : 'Rated';
+        ? t('feed.status.unrated')
+        : t('feed.status.rated');
 
   return (
     <section className="space-y-6">
       <header className="hidden space-y-2 md:block">
-        <h1 className="text-2xl font-semibold">Feed</h1>
-        <p className="text-sm text-slate-400">
-          Matches that matter to you today and recently.
-        </p>
+        <h1 className="text-2xl font-semibold">{t('feed.title')}</h1>
+        <p className="text-sm text-slate-400">{t('feed.subtitle')}</p>
       </header>
 
       {loading && (
@@ -212,7 +214,7 @@ export default function Page() {
       {!loading && error && (
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login'
               ? () => router.push('/login')
@@ -223,8 +225,8 @@ export default function Page() {
 
       {!loading && !error && matches.length === 0 && (
         <StateEmpty
-          title="Tu feed esta vacio. Segui equipos para ver partidos aca."
-          actionLabel="Explorar partidos"
+          title={t('feed.empty.followTitle')}
+          actionLabel={t('feed.empty.cta')}
           onAction={() => router.push('/matches')}
         />
       )}
@@ -237,14 +239,14 @@ export default function Page() {
                 options={statusOptions}
                 value={selectedStatus}
                 onChange={setSelectedStatus}
-                ariaLabel="Filtrar por estado"
+                ariaLabel={t('feed.filters.status')}
                 size="sm"
               />
               <SegmentedControl
                 options={ratingOptions}
                 value={selectedRating}
                 onChange={setSelectedRating}
-                ariaLabel="Filtrar por rating"
+                ariaLabel={t('feed.filters.rating')}
                 size="sm"
               />
             </div>
@@ -252,7 +254,7 @@ export default function Page() {
             <div className="md:hidden">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                  {statusLabel}  {ratingLabel}
+                  {statusLabel} {ratingLabel}
                 </div>
                 <button
                   type="button"
@@ -260,7 +262,7 @@ export default function Page() {
                   onClick={() => setFiltersExpanded((prev) => !prev)}
                   aria-expanded={filtersExpanded}
                 >
-                  {filtersExpanded ? 'Less' : 'Filters'}
+                  {filtersExpanded ? t('feed.filters.less') : t('feed.filters.more')}
                 </button>
               </div>
 
@@ -270,14 +272,14 @@ export default function Page() {
                     options={statusOptions}
                     value={selectedStatus}
                     onChange={setSelectedStatus}
-                    ariaLabel="Filtrar por estado"
+                    ariaLabel={t('feed.filters.status')}
                     size="sm"
                   />
                   <SegmentedControl
                     options={ratingOptions}
                     value={selectedRating}
                     onChange={setSelectedRating}
-                    ariaLabel="Filtrar por rating"
+                    ariaLabel={t('feed.filters.rating')}
                     size="sm"
                   />
                 </div>
@@ -287,7 +289,7 @@ export default function Page() {
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
-                aria-label="Dia anterior"
+                aria-label={t('date.yesterday')}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
                 onClick={() => setSelectedDay(startOfDay(addDays(selectedDay, -1)))}
               >
@@ -301,7 +303,7 @@ export default function Page() {
                     const isSelected = isSameDay(day, selectedDay);
                     const isToday = isSameDay(day, today);
                     const count = stripCounts.get(key) ?? 0;
-                    const dayLabel = getRelativeDayLabel(day, today);
+                    const dayLabel = getRelativeDayLabel(day, today, language);
                     return (
                       <button
                         key={key}
@@ -339,7 +341,7 @@ export default function Page() {
 
               <button
                 type="button"
-                aria-label="Dia siguiente"
+                aria-label={t('date.tomorrow')}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-slate-200 transition hover:bg-white/10 active:scale-95"
                 onClick={() => setSelectedDay(startOfDay(addDays(selectedDay, 1)))}
               >
@@ -350,7 +352,7 @@ export default function Page() {
                 type="button"
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
                 onClick={() => setCalendarOpen(true)}
-                aria-label="Abrir calendario"
+                aria-label={t('matches.toolbar.today')}
               >
                 <CalendarIcon className="h-5 w-5" />
               </button>
@@ -360,8 +362,8 @@ export default function Page() {
           {sortedMatches.length === 0 ? (
             <StateEmpty
               title={emptyTitle}
-              description="Try another day or clear filters."
-              actionLabel="Reset filters"
+              description={t('feed.day.empty.desc')}
+              actionLabel={t('feed.day.empty.reset')}
               onAction={() => {
                 setSelectedStatus('ALL');
                 setSelectedRating('ALL');

@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { formatKickoff, getStatusMeta } from '@/app/lib/match-ui';
+import { getLocale } from '@/app/lib/i18n';
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
+import TeamLogo from '@/app/components/ui/TeamLogo';
 import type { Match } from '@/app/lib/types';
 
 type MatchCardProps = {
@@ -21,18 +24,10 @@ const getTournamentAbbr = (name: string) => {
     .toUpperCase();
 };
 
-const getTeamInitials = (name: string) => {
-  return name
-    .split(' ')
-    .map((word) => word[0])
-    .slice(0, 3)
-    .join('')
-    .toUpperCase();
-};
-
 // Renders a single match card with average rating and CTA buttons.
 export default function MatchCard({ match, onRate }: MatchCardProps) {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const ratingCount = match.rating_count ?? 0;
   const hasRatings = ratingCount > 0;
   const avgScore = Number.isFinite(match.avg_score)
@@ -51,10 +46,13 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
       : myScore !== null
         ? myScore.toFixed(1)
         : '';
-  const ratingLabel = 'Avg rating';
-  const ratingCountLabel = `${ratingCount} ratings`;
+  const ratingLabel = t('match.avgRating');
+  const ratingCountLabel = t('match.ratings', { count: ratingCount });
   const statusMeta = getStatusMeta(match.status, match.date_time);
-  const { dateLabel, timeLabel } = formatKickoff(match.date_time);
+  const { dateLabel, timeLabel } = formatKickoff(
+    match.date_time,
+    getLocale(language),
+  );
   const statusToneStyles: Record<typeof statusMeta.tone, string> = {
     live: 'bg-rose-500/15 text-rose-200 border-rose-400/40 shadow-[0_0_20px_rgba(244,63,94,0.35)]',
     finished:
@@ -68,17 +66,39 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
     neutral:
       'bg-slate-600/20 text-slate-200 border-slate-500/40 shadow-[0_0_18px_rgba(148,163,184,0.2)]',
   };
-  const statusClass = statusToneStyles[statusMeta.tone] ?? statusToneStyles.neutral;
+  const statusClass =
+    statusToneStyles[statusMeta.tone] ?? statusToneStyles.neutral;
   const ringPercent = Math.min(100, Math.max(0, avgScore));
   const hasWatchability =
     match.watchability_score !== null && match.watchability_score !== undefined;
   const watchabilityLabel = hasWatchability
-    ? `Watch ${match.watchability_score}`
+    ? t('match.watch', { score: match.watchability_score as number })
     : null;
   const watchabilityConfidence =
     hasWatchability && match.watchability_confidence
       ? match.watchability_confidence
       : null;
+  const watchabilityConfidenceLabel = watchabilityConfidence
+    ? ({
+        Low: t('match.confidence.low'),
+        Medium: t('match.confidence.medium'),
+        High: t('match.confidence.high'),
+      }[watchabilityConfidence] ?? watchabilityConfidence)
+    : null;
+
+  const statusLabels: Record<string, string> = {
+    LIVE: t('status.live'),
+    FINISHED: t('status.finished'),
+    PENDING: t('status.pending'),
+    PAUSED: t('status.paused'),
+    POSTPONED: t('status.postponed'),
+    SUSPENDED: t('status.suspended'),
+    CANCELLED: t('status.cancelled'),
+    AWARDED: t('status.awarded'),
+    SCHEDULED: t('status.scheduled'),
+    TIMED: t('status.timed'),
+  };
+  const statusLabel = statusLabels[statusMeta.label] ?? statusMeta.label;
 
   return (
     <article
@@ -120,7 +140,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
         <span
           className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${statusClass}`}
         >
-          {statusMeta.label}
+          {statusLabel}
         </span>
       </header>
 
@@ -137,17 +157,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
                   className="flex min-w-0 items-center gap-3 text-left text-slate-100 transition hover:text-white"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
-                    {team.logo_url ? (
-                      <img
-                        src={team.logo_url}
-                        alt={team.name}
-                        className="h-7 w-7 object-contain"
-                      />
-                    ) : (
-                      getTeamInitials(team.name)
-                    )}
-                  </span>
+                  <TeamLogo name={team.name} logoUrl={team.logo_url} size="lg" />
                   <span className="truncate text-sm font-semibold">
                     {team.name}
                   </span>
@@ -162,7 +172,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-4">
               <div className="relative">
-                <div className="pointer-events-none absolute -inset-5 rounded-full bg-emerald-400/20 blur-2xl" />
+                <div className="pointer-events-none absolute -inset-6 rounded-full bg-[radial-gradient(circle,_rgba(52,211,153,0.5),_rgba(14,116,144,0.18),_transparent_65%)] blur-2xl" />
                 <div
                   className="relative flex h-14 w-14 items-center justify-center rounded-full p-[3px] shadow-[0_0_22px_rgba(255,255,255,0.2)]"
                   style={{
@@ -185,7 +195,7 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
             {hasMyRating && (
               <div className="flex items-center gap-3">
                 <div className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                  Your rating
+                  {t('match.yourRating')}
                 </div>
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-300 text-xs font-semibold text-slate-900">
                   {myDisplay}
@@ -209,24 +219,25 @@ export default function MatchCard({ match, onRate }: MatchCardProps) {
             });
           }}
         >
-          {match.my_rating ? 'Editar' : 'Rankear'}
+          {match.my_rating ? t('common.edit') : t('common.rank')}
         </button>
         {hasWatchability && (
-          <div className="group relative flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200">
-            <span>
+          <div className="group relative flex min-w-0 flex-1 items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-200 sm:text-[10px] sm:tracking-[0.2em]">
+            <span className="min-w-0 flex-1 break-words">
               {watchabilityLabel}
-              {watchabilityConfidence ? ` | ${watchabilityConfidence}` : ''}
+              {watchabilityConfidenceLabel
+                ? ` | ${watchabilityConfidenceLabel}`
+                : ''}
             </span>
             <span
               className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-500/70 bg-slate-950/80 text-[9px] font-bold text-slate-200"
-              title="Watchability estima que tan atractivo sera el partido (0-100). Confidence indica que tan confiable es la prediccion segun historial reciente."
-              aria-label="Info: watchability"
+              title={t('match.watchabilityInfo')}
+              aria-label={t('match.watchabilityInfoLabel')}
             >
               i
             </span>
             <div className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] hidden w-56 rounded-xl border border-slate-700/80 bg-slate-950/95 p-2 text-[10px] font-medium normal-case text-slate-200 shadow-[0_12px_30px_rgba(0,0,0,0.45)] group-hover:block">
-              Watchability (0-100) estima que tan atractivo sera el partido.
-              Confidence indica que tan confiable es la prediccion segun historial reciente.
+              {t('match.watchabilityInfo')}
             </div>
           </div>
         )}

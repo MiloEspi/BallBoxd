@@ -1,3 +1,5 @@
+import { getLocale, getRelativeLabel, type Language } from './i18n';
+
 export type DateRange = 'day' | '7d' | 'month';
 
 export const startOfDay = (value: Date) => {
@@ -71,20 +73,18 @@ export const getCenteredWindowDays = (anchorDate: Date, radius = 3) => {
   );
 };
 
-export const getRelativeDayLabel = (value: Date, today: Date) => {
+export const getRelativeDayLabel = (
+  value: Date,
+  today: Date,
+  language: Language = 'en',
+) => {
   const day = startOfDay(value);
   const base = startOfDay(today);
   const diffDays = Math.round(
     (day.getTime() - base.getTime()) / (24 * 60 * 60 * 1000),
   );
-  if (diffDays === 0) {
-    return 'Today';
-  }
-  if (diffDays === -1) {
-    return 'Yesterday';
-  }
-  if (diffDays === 1) {
-    return 'Tomorrow';
-  }
-  return day.toLocaleDateString('en-US', { weekday: 'short' });
+  const weekday = day.toLocaleDateString(getLocale(language), {
+    weekday: 'short',
+  });
+  return getRelativeLabel(language, diffDays, weekday);
 };

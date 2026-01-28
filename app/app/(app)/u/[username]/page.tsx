@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import MatchSummaryCard from '@/app/components/match/MatchSummaryCard';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
@@ -41,6 +42,7 @@ export default function Page() {
   const router = useRouter();
   const params = useParams<ProfilePageParams>();
   const username = getUsernameFromParams(params);
+  const { t } = useLanguage();
   const [data, setData] = useState<PublicProfileRatingsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
@@ -48,15 +50,21 @@ export default function Page() {
   const [isOwner, setIsOwner] = useState(false);
   const [followState, setFollowState] = useState<FollowStateResponse | null>(null);
   const [followError, setFollowError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
-  const loadProfile = async () => {
+  const loadProfile = async (targetPage: number = page) => {
     if (!username) {
       return;
     }
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchPublicProfile(username, page, 6);
+      const response = await fetchPublicProfile(username, targetPage, 6);
+      if (requestRef.current !== requestId || !response) {
+        return;
+      }
       setData(response);
       setFollowState({
         is_following: response.is_following,
@@ -64,19 +72,24 @@ export default function Page() {
         following: response.stats.following,
       });
     } catch (err) {
+      if (requestRef.current !== requestId) {
+        return;
+      }
       if (err instanceof ApiError && err.status === 401) {
         setError({
-          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          message: t('common.sessionExpired'),
           action: 'login',
         });
       } else {
         setError({
-          message: 'No pudimos cargar el perfil.',
+          message: t('public.noProfile'),
           action: 'retry',
         });
       }
     } finally {
-      setLoading(false);
+      if (requestRef.current === requestId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -102,7 +115,15 @@ export default function Page() {
   }, [username]);
 
   useEffect(() => {
-    loadProfile();
+    setPage(1);
+    setData(null);
+    setFollowState(null);
+    setFollowError(null);
+    setError(null);
+  }, [username]);
+
+  useEffect(() => {
+    loadProfile(page);
   }, [username, page]);
 
   const statsCards = useMemo(() => {
@@ -110,14 +131,14 @@ export default function Page() {
       return [];
     }
     return [
-      { label: 'Total ratings', value: data.stats.total_ratings },
-      { label: 'Average score', value: data.stats.avg_score.toFixed(1) },
-      { label: 'Teams followed', value: data.stats.teams_followed },
-      { label: 'Followers', value: data.stats.followers },
-      { label: 'Following', value: data.stats.following },
-      { label: 'Fully watched', value: `${data.stats.fully_watched_pct}%` },
+      { label: t('profile.stats.totalRatings'), value: data.stats.total_ratings },
+      { label: t('profile.stats.avgScore'), value: data.stats.avg_score.toFixed(1) },
+      { label: t('profile.stats.teamsFollowed'), value: data.stats.teams_followed },
+      { label: t('profile.stats.followers'), value: data.stats.followers },
+      { label: t('profile.stats.following'), value: data.stats.following },
+      { label: t('profile.stats.fullyWatched'), value: `${data.stats.fully_watched_pct}%` },
     ];
-  }, [data]);
+  }, [data, t]);
 
   const handleFollowToggle = async () => {
     if (!username || isOwner) {
@@ -144,10 +165,10 @@ export default function Page() {
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setFollowError('Inicia sesion para seguir usuarios.');
+        setFollowError(t('public.followErrorLogin'));
         return;
       }
-      setFollowError('No pudimos actualizar el follow.');
+      setFollowError(t('public.followError'));
     }
   };
 
@@ -155,7 +176,7 @@ export default function Page() {
     return (
       <section className="space-y-6">
         <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-          Invalid username.
+          {t('profile.invalidUsername')}
         </div>
       </section>
     );
@@ -173,14 +194,12 @@ export default function Page() {
               onClick={handleFollowToggle}
               disabled={!followState}
             >
-              {followState?.is_following ? 'Unfollow' : 'Follow'}
+              {followState?.is_following ? t('common.unfollow') : t('common.follow')}
             </button>
           )}
         </div>
-        {followError && (
-          <p className="text-xs text-rose-200">{followError}</p>
-        )}
-        <p className="text-sm text-slate-400">Perfil publico.</p>
+        {followError && <p className="text-xs text-rose-200">{followError}</p>}
+        <p className="text-sm text-slate-400">{t('public.subtitle')}</p>
       </header>
 
       {loading && (
@@ -201,13 +220,19 @@ export default function Page() {
       {!loading && error && (
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login'
               ? () => router.push('/login')
               : loadProfile
           }
         />
+      )}
+
+      {!loading && !error && !data && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
+          {t('public.noProfile')}
+        </div>
       )}
 
       {!loading && !error && data && (
@@ -229,11 +254,11 @@ export default function Page() {
           </div>
 
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold">Ultimos ratings</h2>
+            <h2 className="text-lg font-semibold">{t('public.latestRatings')}</h2>
             {data.ratings.length === 0 ? (
               <StateEmpty
-                title="Todavia no hay ratings."
-                description="Este perfil aun no cargo partidos."
+                title={t('public.noRatings')}
+                description={t('public.noRatingsDesc')}
               />
             ) : (
               <div className="space-y-4">
@@ -252,10 +277,16 @@ export default function Page() {
                 onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
                 disabled={page <= 1}
               >
-                Anterior
+                {t('common.prev')}
               </button>
               <span className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Pagina {page}
+                {t('matches.toolbar.page', {
+                  current: page,
+                  total: Math.max(1, Math.ceil(data.total / data.page_size)),
+                  start: page,
+                  end: page,
+                  totalItems: data.total,
+                })}
               </span>
               <button
                 type="button"
@@ -263,7 +294,7 @@ export default function Page() {
                 onClick={() => setPage((prev) => prev + 1)}
                 disabled={data.total <= page * data.page_size}
               >
-                Siguiente
+                {t('common.next')}
               </button>
             </div>
           )}

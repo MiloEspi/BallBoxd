@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import ImageUpload from '@/app/components/ui/ImageUpload';
 
 type ProfileAvatarModalProps = {
@@ -19,6 +20,7 @@ export default function ProfileAvatarModal({
   onClose,
   onSave,
 }: ProfileAvatarModalProps) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [avatar, setAvatar] = useState(value);
   const [error, setError] = useState('');
@@ -45,7 +47,7 @@ export default function ProfileAvatarModal({
   const handleSave = () => {
     setError('');
     if (!avatar) {
-      setError('Subi una imagen para continuar.');
+      setError(t('profile.avatar.required'));
       return;
     }
     onSave(avatar);
@@ -71,18 +73,18 @@ export default function ProfileAvatarModal({
           <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                Perfil
+                {t('profile.avatar.title')}
               </p>
               <h2 className="text-base font-semibold text-white">
-                Foto de perfil
+                {t('profile.avatar.subtitle')}
               </h2>
             </div>
             <button
               className="text-xs uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
               type="button"
               onClick={onClose}
-              aria-label="Cerrar"
-              title="Cerrar"
+              aria-label={t('common.close')}
+              title={t('common.close')}
             >
               X
             </button>
@@ -90,11 +92,11 @@ export default function ProfileAvatarModal({
 
           <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-5 py-5">
             <ImageUpload
-              label="Foto de perfil"
-              helper="Usa una foto cuadrada. Se recorta automaticamente."
+              label={t('profile.avatar.subtitle')}
+              helper={t('profile.avatar.helper')}
               suggestions={[
-                'Una foto clara del rostro funciona mejor.',
-                'Fondos simples mantienen el perfil limpio.',
+                t('profile.avatar.suggestion1'),
+                t('profile.avatar.suggestion2'),
               ]}
               value={avatar}
               onChange={setAvatar}
@@ -117,14 +119,14 @@ export default function ProfileAvatarModal({
               type="button"
               onClick={onClose}
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button
               className="rounded-full bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-[0_12px_25px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
               onClick={handleSave}
             >
-              Guardar foto
+              {t('profile.avatar.save')}
             </button>
           </div>
         </div>

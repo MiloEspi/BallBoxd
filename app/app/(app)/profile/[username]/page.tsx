@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import {
   ApiError,
   fetchMe,
@@ -17,6 +18,7 @@ import StateError from '@/app/components/ui/StateError';
 import MatchSummaryCard from '@/app/components/match/MatchSummaryCard';
 import ProfileAvatarModal from '@/app/components/profile/ProfileAvatarModal';
 import ProfileMemoriesSection from '@/app/components/profile/ProfileMemoriesSection';
+import TeamLogo from '@/app/components/ui/TeamLogo';
 import type {
   ProfileActivityResponse,
   ProfileHighlightsResponse,
@@ -68,28 +70,6 @@ type StatCardItem = {
   value: string | number;
 };
 
-const TAB_OPTIONS = [
-  { value: 'stats', label: 'Stats' },
-  { value: 'activity', label: 'Activity' },
-  { value: 'highlights', label: 'Highlights' },
-];
-
-const RANGE_OPTIONS = [
-  { value: 'week', label: 'This week' },
-  { value: 'month', label: 'Month' },
-  { value: 'year', label: 'Year' },
-];
-
-const TEAM_COLORS = [
-  '#6EE7B7',
-  '#60A5FA',
-  '#FBBF24',
-  '#F87171',
-  '#A78BFA',
-  '#F472B6',
-  '#38BDF8',
-];
-
 // Extracts a usable username from Next.js route params.
 const getUsernameFromParams = (params: ProfilePageParams) => {
   const usernameParam = params?.username;
@@ -119,6 +99,16 @@ const renderStatCard = (stat: StatCardItem) => (
     <p className="mt-2 text-3xl font-semibold text-white">{stat.value}</p>
   </div>
 );
+
+const TEAM_COLORS = [
+  '#6EE7B7',
+  '#60A5FA',
+  '#FBBF24',
+  '#F87171',
+  '#A78BFA',
+  '#F472B6',
+  '#38BDF8',
+];
 
 // Builds a conic-gradient string for the team distribution donut.
 const buildConicGradient = (
@@ -150,6 +140,8 @@ function StatsPanel({
   onRetry,
   onLogin,
 }: StatsPanelProps) {
+  const { t } = useLanguage();
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -170,7 +162,7 @@ function StatsPanel({
     return (
       <StateError
         message={error.message}
-        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
         onAction={error.action === 'login' ? onLogin : onRetry}
       />
     );
@@ -179,18 +171,18 @@ function StatsPanel({
   if (!data) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        No stats data found.
+        {t('profile.activity.emptyTitle')}
       </div>
     );
   }
 
   const statsCards: StatCardItem[] = [
-    { label: 'Total ratings', value: data.stats.total_ratings },
-    { label: 'Average score', value: data.stats.avg_score.toFixed(1) },
-    { label: 'Teams followed', value: data.stats.teams_followed },
-    { label: 'Followers', value: data.stats.followers },
-    { label: 'Following', value: data.stats.following },
-    { label: 'Fully watched', value: `${data.stats.fully_watched_pct}%` },
+    { label: t('profile.stats.totalRatings'), value: data.stats.total_ratings },
+    { label: t('profile.stats.avgScore'), value: data.stats.avg_score.toFixed(1) },
+    { label: t('profile.stats.teamsFollowed'), value: data.stats.teams_followed },
+    { label: t('profile.stats.followers'), value: data.stats.followers },
+    { label: t('profile.stats.following'), value: data.stats.following },
+    { label: t('profile.stats.fullyWatched'), value: `${data.stats.fully_watched_pct}%` },
   ];
   const teamGradient = buildConicGradient(data.team_distribution, TEAM_COLORS);
 
@@ -205,17 +197,17 @@ function StatsPanel({
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Teams distribution
+                {t('profile.stats.distribution')}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Matches rated by team.
+                {t('profile.stats.distributionHint')}
               </p>
             </div>
           </div>
 
           {data.team_distribution.length === 0 ? (
             <p className="mt-6 text-sm text-slate-400">
-              No team data yet.
+              {t('profile.stats.noTeams')}
             </p>
           ) : (
             <div className="mt-6 flex flex-wrap items-center gap-6">
@@ -252,15 +244,15 @@ function StatsPanel({
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Leagues top 5
+            {t('profile.stats.topLeagues')}
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            Share of rated matches by league.
+            {t('profile.stats.topLeaguesHint')}
           </p>
 
           {data.league_top.length === 0 ? (
             <p className="mt-6 text-sm text-slate-400">
-              No league data yet.
+              {t('profile.stats.noLeagues')}
             </p>
           ) : (
             <div className="mt-6 space-y-4">
@@ -299,6 +291,8 @@ function ActivityPanel({
   onLogin,
   onExplore,
 }: ActivityPanelProps) {
+  const { t } = useLanguage();
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -313,7 +307,7 @@ function ActivityPanel({
     return (
       <StateError
         message={error.message}
-        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
         onAction={error.action === 'login' ? onLogin : onRetry}
       />
     );
@@ -322,8 +316,8 @@ function ActivityPanel({
   if (!data || data.results.length === 0) {
     return (
       <StateEmpty
-        title="Todavía no hay actividad."
-        actionLabel="Explorar partidos"
+        title={t('profile.activity.emptyTitle')}
+        actionLabel={t('profile.activity.emptyCta')}
         onAction={onExplore}
       />
     );
@@ -340,6 +334,8 @@ function HighlightsPanel({
   onRetry,
   onLogin,
 }: HighlightsPanelProps) {
+  const { t } = useLanguage();
+
   if (loading) {
     return (
       <div className="grid gap-4 lg:grid-cols-2">
@@ -353,7 +349,7 @@ function HighlightsPanel({
     return (
       <StateError
         message={error.message}
-        actionLabel={error.action === 'login' ? 'Iniciar sesión' : 'Reintentar'}
+        actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
         onAction={error.action === 'login' ? onLogin : onRetry}
       />
     );
@@ -362,7 +358,7 @@ function HighlightsPanel({
   if (!data) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-        No highlights data found.
+        {t('profile.highlights.noneTop')}
       </div>
     );
   }
@@ -371,10 +367,12 @@ function HighlightsPanel({
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Top rated
+          {t('profile.highlights.top')}
         </h3>
         {data.top_rated.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-400">No top matches.</p>
+          <p className="mt-4 text-sm text-slate-400">
+            {t('profile.highlights.noneTop')}
+          </p>
         ) : (
           <div className="mt-4 space-y-4">
             {data.top_rated.map(renderActivityCard)}
@@ -383,10 +381,12 @@ function HighlightsPanel({
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Low rated
+          {t('profile.highlights.low')}
         </h3>
         {data.low_rated.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-400">No low matches.</p>
+          <p className="mt-4 text-sm text-slate-400">
+            {t('profile.highlights.noneLow')}
+          </p>
         ) : (
           <div className="mt-4 space-y-4">
             {data.low_rated.map(renderActivityCard)}
@@ -402,6 +402,7 @@ export default function Page() {
   const router = useRouter();
   const params = useParams<ProfilePageParams>();
   const username = getUsernameFromParams(params);
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabKey>('stats');
   const [range, setRange] = useState<RangeKey>('month');
   const [statsData, setStatsData] = useState<ProfileStatsResponse | null>(null);
@@ -427,6 +428,18 @@ export default function Page() {
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamsData, setTeamsData] = useState<Team[]>([]);
 
+  const TAB_OPTIONS = [
+    { value: 'stats', label: t('profile.stats') },
+    { value: 'activity', label: t('profile.activity') },
+    { value: 'highlights', label: t('profile.highlights') },
+  ];
+
+  const RANGE_OPTIONS = [
+    { value: 'week', label: t('profile.range.week') },
+    { value: 'month', label: t('profile.range.month') },
+    { value: 'year', label: t('profile.range.year') },
+  ];
+
   // Updates the loading flag for a specific tab.
   const setTabLoading = (tab: TabKey, value: boolean) => {
     setLoading((prev) => ({ ...prev, [tab]: value }));
@@ -440,12 +453,12 @@ export default function Page() {
   const resolveError = (err: unknown): ErrorState => {
     if (err instanceof ApiError && err.status === 401) {
       return {
-        message: 'Tu sesión expiró. Iniciá sesión de nuevo.',
+        message: t('common.sessionExpired'),
         action: 'login',
       };
     }
     return {
-      message: 'No pudimos cargar los datos.',
+      message: t('common.loadError'),
       action: 'retry',
     };
   };
@@ -625,8 +638,8 @@ export default function Page() {
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 401
-          ? 'Inicia sesion para ver los equipos seguidos.'
-          : 'No pudimos cargar los equipos.';
+          ? t('profile.followedTeams.login')
+          : t('profile.followedTeams.error');
       setTeamsError(message);
     } finally {
       setTeamsLoading(false);
@@ -681,7 +694,7 @@ export default function Page() {
     return (
       <section className="space-y-6">
         <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
-          Invalid username.
+          {t('profile.invalidUsername')}
         </div>
       </section>
     );
@@ -702,7 +715,7 @@ export default function Page() {
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
-                  alt={`Avatar de ${displayUsername}`}
+                  alt={`Avatar ${displayUsername}`}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -715,13 +728,13 @@ export default function Page() {
                 type="button"
                 onClick={() => setAvatarOpen(true)}
               >
-                Foto
+                {t('profile.avatar.edit')}
               </button>
             )}
           </div>
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-              Profile
+              {t('profile.title')}
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold">@{displayUsername}</h1>
@@ -732,29 +745,27 @@ export default function Page() {
                 type="button"
                 onClick={handleTeamsToggle}
               >
-                Ver equipos que sigue
+                {t('profile.followedTeams.cta')}
                 {typeof teamsCount === 'number' ? ` (${teamsCount})` : ''}
               </button>
             </div>
           </div>
         </div>
-        <p className="text-sm text-slate-400">
-          Switch between stats, activity, and highlights.
-        </p>
+        <p className="text-sm text-slate-400">{t('profile.activity')}</p>
       </header>
 
       {teamsOpen && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-center justify-between">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-              Equipos que sigue
+              {t('profile.followedTeams.title')}
             </p>
             <button
               className="text-[10px] uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
               type="button"
               onClick={() => setTeamsOpen(false)}
             >
-              Cerrar
+              {t('profile.followedTeams.close')}
             </button>
           </div>
           {teamsLoading && (
@@ -769,7 +780,7 @@ export default function Page() {
           )}
           {!teamsLoading && !teamsError && teamsData.length === 0 && (
             <p className="mt-4 text-sm text-slate-400">
-              Todavia no sigue equipos.
+              {t('profile.followedTeams.empty')}
             </p>
           )}
           {!teamsLoading && !teamsError && teamsData.length > 0 && (
@@ -779,17 +790,7 @@ export default function Page() {
                   key={team.id}
                   className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
                 >
-                  <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-800 bg-slate-900/60 text-[10px] uppercase tracking-[0.2em] text-slate-400">
-                    {team.logo_url ? (
-                      <img
-                        src={team.logo_url}
-                        alt={team.name}
-                        className="h-full w-full object-contain p-1"
-                      />
-                    ) : (
-                      <span>{team.name.slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </div>
+                  <TeamLogo name={team.name} logoUrl={team.logo_url} size="md" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-100">
                       {team.name}
@@ -819,7 +820,7 @@ export default function Page() {
           options={TAB_OPTIONS}
           value={activeTab}
           onChange={handleTabChange}
-          ariaLabel="Profile tabs"
+          ariaLabel={t('profile.tabsAria')}
           size="lg"
         />
         {(activeTab === 'highlights' || activeTab === 'stats') && (
@@ -828,7 +829,7 @@ export default function Page() {
               options={RANGE_OPTIONS}
               value={range}
               onChange={handleRangeChange}
-              ariaLabel="Profile range"
+              ariaLabel={t('profile.rangeAria')}
               size="sm"
             />
           </div>

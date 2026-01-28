@@ -7,6 +7,7 @@ from .views import (
     ProfileActivityView,
     ProfileHighlightsView,
     ProfileMemoriesView,
+    ProfileTeamsView,
     ProfileStatsView,
     ProfileView,
     ProfileRatedMatchesView,
@@ -35,6 +36,11 @@ urlpatterns = [
         "profile/<str:username>/stats/",
         ProfileStatsView.as_view(),
         name="profile-stats",
+    ),
+    path(
+        "profile/<str:username>/teams/",
+        ProfileTeamsView.as_view(),
+        name="profile-teams",
     ),
     path(
         "profile/<str:username>/activity/",

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MagnifyingGlassIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import LanguageToggle from '@/app/components/i18n/LanguageToggle';
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import useProfileHref from '@/app/lib/use-profile-href';
 import GlobalSearch from '@/app/components/search/GlobalSearch';
 
@@ -16,14 +18,15 @@ export default function MobileTopBar() {
   const router = useRouter();
   const pathname = usePathname();
   const profileHref = useProfileHref();
+  const { t } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const navItems: NavItem[] = [
-    { href: '/home', label: 'Home' },
-    { href: '/matches', label: 'Partidos' },
-    { href: '/teams', label: 'Equipos' },
-    { href: profileHref, label: 'Perfil' },
+    { href: '/home', label: t('nav.home') },
+    { href: '/matches', label: t('nav.matches') },
+    { href: '/teams', label: t('nav.teams') },
+    { href: profileHref, label: t('nav.profile') },
   ];
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export default function MobileTopBar() {
             <Link
               href="/home"
               className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-slate-200 shadow-[inset_0_0_18px_rgba(255,255,255,0.06)]"
-              aria-label="BallBoxd"
+              aria-label={t('nav.goHome')}
             >
               BB
             </Link>
@@ -60,7 +63,7 @@ export default function MobileTopBar() {
                 type="button"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
                 onClick={() => router.push('/search')}
-                aria-label="Buscar"
+                aria-label={t('nav.search')}
               >
                 <MagnifyingGlassIcon className="h-5 w-5" />
               </button>
@@ -70,7 +73,7 @@ export default function MobileTopBar() {
                   type="button"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
                   onClick={() => setMenuOpen((prev) => !prev)}
-                  aria-label="Menu"
+                  aria-label={t('nav.menu')}
                 >
                   <UserCircleIcon className="h-6 w-6" />
                 </button>
@@ -82,19 +85,23 @@ export default function MobileTopBar() {
                       className="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
                       onClick={() => setMenuOpen(false)}
                     >
-                      Perfil
+                      {t('nav.profile')}
                     </Link>
                     <Link
                       href="/logout"
                       className="block rounded-xl px-3 py-2 text-sm font-semibold text-white hover:bg-white/10"
                       onClick={() => setMenuOpen(false)}
                     >
-                      Cerrar sesion
+                      {t('nav.logout')}
                     </Link>
                   </div>
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="flex justify-end pb-2">
+            <LanguageToggle />
           </div>
 
           <nav className="flex items-center justify-between gap-1 pb-2">

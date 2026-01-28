@@ -1,5 +1,9 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
+import { getLocale } from '@/app/lib/i18n';
 import type { RatingWithMatch } from '@/app/lib/types';
 
 type FeaturedMatchCardProps = {
@@ -15,9 +19,9 @@ type FeaturedMatchCardProps = {
   onDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void;
 };
 
-const formatDate = (value: string) => {
+const formatDate = (value: string, locale: string) => {
   const date = new Date(value);
-  return date.toLocaleDateString('es-AR', {
+  return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -39,7 +43,7 @@ const StadiumIcon = () => (
   </svg>
 );
 
-// Editorial featured match card for "Mis partidos".
+// Editorial featured match card for "My matches".
 export default function FeaturedMatchCard({
   rating,
   isOwner,
@@ -52,11 +56,14 @@ export default function FeaturedMatchCard({
   onDrop,
   onDragEnd,
 }: FeaturedMatchCardProps) {
+  const router = useRouter();
+  const { t, language } = useLanguage();
   const match = rating.match;
   const representative = rating.representative_photo_url ?? '';
   const hasRepresentative = Boolean(representative);
   const showBadge = Boolean(rating.attended);
   const ringPercent = Math.min(100, Math.max(0, rating.score ?? 0));
+  const locale = getLocale(language);
 
   return (
     <div
@@ -70,6 +77,21 @@ export default function FeaturedMatchCard({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
+      onClick={() => {
+        if (!isDragging) {
+          router.push(`/matches/${match.id}`);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          if (!isDragging) {
+            router.push(`/matches/${match.id}`);
+          }
+        }
+      }}
     >
       <div className="pointer-events-none absolute inset-0 opacity-80">
         <div className="absolute -left-16 -top-16 h-40 w-40 rounded-full bg-emerald-400/10 blur-3xl" />
@@ -83,7 +105,7 @@ export default function FeaturedMatchCard({
               {match.tournament.name}
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
-              {formatDate(match.date_time)}
+              {formatDate(match.date_time, locale)}
             </p>
           </div>
           <div className="relative">
@@ -122,14 +144,14 @@ export default function FeaturedMatchCard({
               />
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                Imagen destacada
+                {t('profile.memories.imagePlaceholder')}
               </div>
             )}
 
             {showBadge && (
               <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
                 <StadiumIcon />
-                Estuve ahi
+                {t('profile.memories.attendedBadge')}
               </div>
             )}
           </div>
@@ -140,16 +162,22 @@ export default function FeaturedMatchCard({
             <button
               className="rounded-full border border-slate-700 px-3 py-1 text-[9px] uppercase tracking-[0.2em] text-slate-300 transition hover:border-slate-500"
               type="button"
-              onClick={() => onEdit?.(rating)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onEdit?.(rating);
+              }}
             >
-              Editar
+              {t('common.edit')}
             </button>
             <button
               className="text-[10px] uppercase tracking-[0.2em] text-rose-200 transition hover:text-rose-100"
               type="button"
-              onClick={() => onRemove?.(match.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove?.(match.id);
+              }}
             >
-              Quitar
+              {t('memory.remove')}
             </button>
           </div>
         )}

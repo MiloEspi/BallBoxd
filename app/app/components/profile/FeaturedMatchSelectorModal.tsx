@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import { fetchProfileRatedMatches } from '@/app/lib/api';
+import { getLocale } from '@/app/lib/i18n';
 import type { RatingWithMatch } from '@/app/lib/types';
 
 type FeaturedMatchSelectorModalProps = {
@@ -14,9 +16,9 @@ type FeaturedMatchSelectorModalProps = {
   onConfirm: (matchId: number, replaceMatchId?: number) => Promise<void>;
 };
 
-const formatDate = (value: string) => {
+const formatDate = (value: string, locale: string) => {
   const date = new Date(value);
-  return date.toLocaleDateString('es-AR', {
+  return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -31,6 +33,8 @@ export default function FeaturedMatchSelectorModal({
   onClose,
   onConfirm,
 }: FeaturedMatchSelectorModalProps) {
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RatingWithMatch[]>([]);
@@ -47,7 +51,7 @@ export default function FeaturedMatchSelectorModal({
       const response = await fetchProfileRatedMatches(username, value);
       setResults(response.results);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos cargar.');
+      setError(err instanceof Error ? err.message : t('profile.memories.loadError'));
     } finally {
       setLoading(false);
     }
@@ -66,7 +70,7 @@ export default function FeaturedMatchSelectorModal({
         onClose();
       } catch (err) {
         setActionError(
-          err instanceof Error ? err.message : 'No pudimos guardar.',
+          err instanceof Error ? err.message : t('common.saveError'),
         );
       }
       return;
@@ -85,7 +89,7 @@ export default function FeaturedMatchSelectorModal({
       onClose();
     } catch (err) {
       setActionError(
-        err instanceof Error ? err.message : 'No pudimos guardar.',
+        err instanceof Error ? err.message : t('common.saveError'),
       );
     }
   };
@@ -109,12 +113,12 @@ export default function FeaturedMatchSelectorModal({
           <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                Mis partidos
+                {t('profile.memories.selector.title')}
               </p>
               <h2 className="text-lg font-semibold text-white">
                 {step === 'select'
-                  ? 'Elegi un partido'
-                  : 'Reemplazar destacado'}
+                  ? t('profile.memories.selector.select')
+                  : t('profile.memories.selector.replace')}
               </h2>
             </div>
             <button
@@ -122,7 +126,7 @@ export default function FeaturedMatchSelectorModal({
               type="button"
               onClick={onClose}
             >
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
 
@@ -132,7 +136,7 @@ export default function FeaturedMatchSelectorModal({
                 <div className="flex flex-wrap items-center gap-3">
                   <input
                     className="min-w-[240px] flex-1 rounded-full border border-slate-800 bg-slate-950/70 px-4 py-2 text-sm text-slate-100"
-                    placeholder="Buscar partidos valorados..."
+                    placeholder={t('profile.memories.selector.searchPlaceholder')}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
@@ -142,13 +146,13 @@ export default function FeaturedMatchSelectorModal({
                     onClick={() => loadResults(query)}
                     disabled={loading}
                   >
-                    Buscar
+                    {t('profile.memories.selector.search')}
                   </button>
                 </div>
 
                 {loading && (
                   <div className="text-sm text-slate-400">
-                    Cargando partidos...
+                    {t('profile.memories.selector.loading')}
                   </div>
                 )}
 
@@ -165,7 +169,7 @@ export default function FeaturedMatchSelectorModal({
 
                 {!loading && results.length === 0 && (
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                    No encontramos partidos con ese filtro.
+                    {t('profile.memories.selector.empty')}
                   </div>
                 )}
 
@@ -184,7 +188,7 @@ export default function FeaturedMatchSelectorModal({
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           {rating.match.tournament.name} ·{' '}
-                          {formatDate(rating.match.date_time)}
+                          {formatDate(rating.match.date_time, locale)}
                         </p>
                       </div>
                       <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
@@ -199,7 +203,7 @@ export default function FeaturedMatchSelectorModal({
             {step === 'replace' && (
               <>
                 <p className="text-sm text-slate-400">
-                  Ya tenes {maxCount} partidos. Elegi cual reemplazar.
+                  {t('profile.memories.selector.full', { count: maxCount })}
                 </p>
                 {actionError && (
                   <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
@@ -220,7 +224,7 @@ export default function FeaturedMatchSelectorModal({
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {rating.match.tournament.name} ·{' '}
-                        {formatDate(rating.match.date_time)}
+                        {formatDate(rating.match.date_time, locale)}
                       </p>
                     </button>
                   ))}
@@ -236,11 +240,11 @@ export default function FeaturedMatchSelectorModal({
                 type="button"
                 onClick={() => setStep('select')}
               >
-                Volver
+                {t('profile.memories.selector.back')}
               </button>
             ) : (
               <span className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Seleccion manual
+                {t('profile.memories.selector.manual')}
               </span>
             )}
             <button
@@ -248,7 +252,7 @@ export default function FeaturedMatchSelectorModal({
               type="button"
               onClick={onClose}
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
           </div>
         </div>

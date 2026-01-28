@@ -23,6 +23,7 @@ from matches.serializers import (
     LeagueSerializer,
     SearchMatchSerializer,
     TeamDetailSerializer,
+    TeamSerializer,
     TeamListSerializer,
 )
 from .models import Follow, UserFollow
@@ -239,6 +240,20 @@ class ProfileView(APIView):
 
         serializer = ProfileResponseSerializer(payload)
         return Response(serializer.data)
+
+
+class ProfileTeamsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Returns teams followed by the profile user.
+    def get(self, request, username):
+        profile_user = get_object_or_404(User, username=username)
+        team_ids = Follow.objects.filter(user=profile_user).values_list(
+            "team_id", flat=True
+        )
+        teams_qs = Team.objects.filter(id__in=team_ids).order_by("name")
+        serializer = TeamSerializer(teams_qs, many=True)
+        return Response({"count": teams_qs.count(), "results": serializer.data})
 
 
 class PublicProfileView(APIView):

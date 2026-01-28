@@ -5,12 +5,15 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import GlobalSearch from '@/app/components/search/GlobalSearch';
+import LanguageToggle from '@/app/components/i18n/LanguageToggle';
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export default function SiteHeader() {
   const [hasToken, setHasToken] = useState(false);
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   const isAppRoute =
     pathname === '/home' ||
@@ -49,19 +52,20 @@ export default function SiteHeader() {
           <GlobalSearch />
         </div>
         <nav className="ml-auto flex items-center gap-3 text-sm">
+          <LanguageToggle />
           {hasToken ? (
             <>
               <Link
                 href="/home"
                 className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 transition hover:border-slate-500"
               >
-                Ir a home
+                {t('nav.goHome')}
               </Link>
               <Link
                 href="/logout"
                 className="rounded-full bg-white px-4 py-2 font-semibold text-slate-900 transition hover:bg-slate-200"
               >
-                Cerrar sesion
+                {t('nav.logout')}
               </Link>
             </>
           ) : (
@@ -70,14 +74,14 @@ export default function SiteHeader() {
                 href="/login?mode=login"
                 className="rounded-full border border-slate-700 px-4 py-2 text-slate-200 transition hover:border-slate-500"
               >
-                Iniciar sesion
+                {t('nav.login')}
               </Link>
               {!DEMO_MODE && (
                 <Link
                   href="/login?mode=register"
                   className="rounded-full bg-white px-4 py-2 font-semibold text-slate-900 transition hover:bg-slate-200"
                 >
-                  Registrarse
+                  {t('nav.register')}
                 </Link>
               )}
             </>

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import LeagueSelect from '@/app/components/ui/LeagueSelect';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
+import TeamLogo from '@/app/components/ui/TeamLogo';
 import { fetchMatches, fetchTeams, followTeam, unfollowTeam } from '@/app/lib/api';
 import type { Match, Team } from '@/app/lib/types';
 
@@ -35,9 +37,7 @@ const buildLeagueOptions = (matches: Match[]) => {
       });
     }
   });
-  return Array.from(map.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const buildTeamLeagueMap = (matches: Match[]) => {
@@ -57,6 +57,7 @@ const buildTeamLeagueMap = (matches: Match[]) => {
 // Teams catalog page with league navigation and follow controls.
 export default function Page() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [query, setQuery] = useState('');
@@ -84,7 +85,7 @@ export default function Page() {
         setMatches([]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load teams.');
+      setError(err instanceof Error ? err.message : t('teams.follow.error'));
     } finally {
       setLoading(false);
     }
@@ -122,7 +123,7 @@ export default function Page() {
 
   const leagueDropdownOptions = useMemo<LeagueOption[]>(() => {
     const options = [
-      { value: 'ALL', label: 'All leagues' },
+      { value: 'ALL', label: t('matches.toolbar.status.all') },
       ...leagueOptions.map((league) => ({
         value: String(league.id),
         label: league.name,
@@ -130,10 +131,10 @@ export default function Page() {
       })),
     ];
     if (hasOtherTeams) {
-      options.push({ value: 'OTHER', label: 'Other teams' });
+      options.push({ value: 'OTHER', label: t('teams.other') });
     }
     return options;
-  }, [hasOtherTeams, leagueOptions]);
+  }, [hasOtherTeams, leagueOptions, t]);
 
   const filteredTeams = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -190,7 +191,7 @@ export default function Page() {
           item.id === team.id ? { ...item, is_following: !next } : item,
         ),
       );
-      setError(err instanceof Error ? err.message : 'Failed to update follow.');
+      setError(err instanceof Error ? err.message : t('teams.follow.error'));
     } finally {
       setPendingId(null);
     }
@@ -199,10 +200,8 @@ export default function Page() {
   return (
     <section className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Equipos</h1>
-        <p className="text-sm text-slate-400">
-          Busca equipos y sigue los que quieras ver en tu feed.
-        </p>
+        <h1 className="text-2xl font-semibold">{t('teams.title')}</h1>
+        <p className="text-sm text-slate-400">{t('teams.subtitle')}</p>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -210,14 +209,14 @@ export default function Page() {
           className="w-full max-w-md rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 outline-none focus:border-white/30"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar por nombre o pais..."
+          placeholder={t('teams.search.placeholder')}
         />
         <button
           type="button"
           className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:bg-white/10"
           onClick={() => setQuery('')}
         >
-          Limpiar
+          {t('teams.clear')}
         </button>
         <button
           type="button"
@@ -228,7 +227,7 @@ export default function Page() {
           }`}
           onClick={() => setShowFollowingOnly((prev) => !prev)}
         >
-          Following only
+          {t('common.followingOnly')}
         </button>
         <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
           <select
@@ -238,25 +237,26 @@ export default function Page() {
               setSortBy(event.target.value === 'follow' ? 'follow' : 'az')
             }
           >
-            <option value="az">A-Z</option>
-            <option value="follow">Following first</option>
+            <option value="az">{t('teams.sort.az')}</option>
+            <option value="follow">{t('teams.sort.followFirst')}</option>
           </select>
         </div>
       </div>
 
       <div className="lg:hidden">
         <LeagueSelect
-          label="League"
+          label={t('matches.toolbar.league')}
           value={selectedLeague}
           options={leagueDropdownOptions}
           onChange={setSelectedLeague}
+          emptyLabel={t('leagues.empty')}
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
         <aside className="hidden rounded-2xl border border-white/10 bg-white/5 p-4 lg:block">
           <p className="text-xs uppercase tracking-[0.25em] text-slate-400">
-            Leagues
+            {t('teams.leagues')}
           </p>
           <div className="mt-3 max-h-[70vh] space-y-2 overflow-y-auto pr-1">
             {leagueDropdownOptions.map((league) => {
@@ -301,14 +301,14 @@ export default function Page() {
                 type="button"
                 onClick={loadTeams}
               >
-                Retry
+                {t('common.retry')}
               </button>
             </div>
           )}
 
           {!loading && !error && filteredTeams.length === 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-              No hay equipos para esta busqueda.
+              {t('teams.empty')}
             </div>
           )}
 
@@ -342,17 +342,7 @@ export default function Page() {
                       }}
                     >
                       <div className="flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
-                          {team.logo_url ? (
-                            <img
-                              src={team.logo_url}
-                              alt={team.name}
-                              className="h-full w-full object-contain p-2"
-                            />
-                          ) : (
-                            team.name.slice(0, 2)
-                          )}
-                        </div>
+                        <TeamLogo name={team.name} logoUrl={team.logo_url} size="xl" />
                         <div className="space-y-1">
                           <h2 className="text-base font-semibold text-white">
                             {team.name}
@@ -378,10 +368,10 @@ export default function Page() {
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         {pendingId === team.id
-                          ? 'Guardando...'
+                          ? t('teams.follow.save')
                           : team.is_following
-                          ? 'Siguiendo'
-                          : 'Seguir'}
+                            ? t('teams.follow.following')
+                            : t('teams.follow.follow')}
                       </button>
                     </article>
                   ))}

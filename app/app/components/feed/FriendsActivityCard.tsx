@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
+import { getLocale } from '@/app/lib/i18n';
 import type { FriendsFeedItem } from '@/app/lib/types';
 
 type FriendsActivityCardProps = {
@@ -10,26 +12,30 @@ type FriendsActivityCardProps = {
   variant?: 'default' | 'compact';
 };
 
-const formatDate = (value: string) => {
+const formatDate = (value: string, locale: string) => {
   const date = new Date(value);
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 };
 
-const timeAgo = (value: string) => {
+const timeAgo = (
+  value: string,
+  language: 'en' | 'es',
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) => {
   const now = Date.now();
   const timestamp = new Date(value).getTime();
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-  if (days > 0) return `hace ${days}d`;
-  if (hours > 0) return `hace ${hours}h`;
-  if (minutes > 0) return `hace ${minutes}m`;
-  return 'recien';
+  if (days > 0) return t('time.agoDays', { count: days });
+  if (hours > 0) return t('time.agoHours', { count: hours });
+  if (minutes > 0) return t('time.agoMinutes', { count: minutes });
+  return t('time.justNow');
 };
 
 const getInitials = (value: string) => {
@@ -42,8 +48,10 @@ export default function FriendsActivityCard({
   className,
   variant = 'default',
 }: FriendsActivityCardProps) {
-  const action = item.review_snippet ? 'reseno' : 'califico';
+  const { t, language } = useLanguage();
+  const action = item.review_snippet ? t('match.reviewed') : t('match.rated');
   const initials = getInitials(item.actor.username);
+  const locale = getLocale(language);
   const baseClass =
     variant === 'compact'
       ? 'rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-[0_14px_30px_rgba(0,0,0,0.24)]'
@@ -64,7 +72,8 @@ export default function FriendsActivityCard({
               @{item.actor.username}
             </Link>
             <p className="mt-1 text-xs text-slate-400">
-              {action} un partido - {timeAgo(item.created_at)}
+              {action} {t('common.match')} -{' '}
+              {timeAgo(item.created_at, language, t)}
             </p>
           </div>
         </div>
@@ -84,7 +93,7 @@ export default function FriendsActivityCard({
           {item.match.home_team.name} vs {item.match.away_team.name}
         </Link>
         <p className="mt-1 text-xs text-slate-500">
-          {formatDate(item.match.date_time)}
+          {formatDate(item.match.date_time, locale)}
         </p>
       </div>
 
@@ -99,7 +108,7 @@ export default function FriendsActivityCard({
           href={`/matches/${item.match.id}`}
           className="rounded-full border border-slate-700 px-3 py-1 text-slate-200 transition hover:border-slate-500"
         >
-          Ver partido
+          {t('common.viewMatch')}
         </Link>
       </div>
     </article>

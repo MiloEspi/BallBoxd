@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { usePathname } from 'next/navigation';
 import useProfileHref from '@/app/lib/use-profile-href';
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 
 type NavItem = {
   href: string;
@@ -12,15 +12,15 @@ type NavItem = {
 
 // Renders the app navigation for mobile and desktop.
 export default function AppSidebar() {
-  const router = useRouter();
   const pathname = usePathname();
   const profileHref = useProfileHref();
+  const { t } = useLanguage();
 
   const navItems: NavItem[] = [
-    { href: '/home', label: 'Home' },
-    { href: '/matches', label: 'Partidos' },
-    { href: '/teams', label: 'Equipos' },
-    { href: profileHref, label: 'Perfil' },
+    { href: '/home', label: t('nav.home') },
+    { href: '/matches', label: t('nav.matches') },
+    { href: '/teams', label: t('nav.teams') },
+    { href: profileHref, label: t('nav.profile') },
   ];
 
   return (
@@ -31,15 +31,7 @@ export default function AppSidebar() {
             BallBoxd
           </p>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-lg font-semibold text-white">Panel</p>
-            <button
-              type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
-              onClick={() => router.push('/search')}
-              aria-label="Buscar"
-            >
-              <MagnifyingGlassIcon className="h-4 w-4" />
-            </button>
+            <p className="text-lg font-semibold text-white">{t('nav.panel')}</p>
           </div>
         </div>
 
@@ -75,7 +67,7 @@ export default function AppSidebar() {
         <div className="mt-auto space-y-4">
           <div className="h-px w-full bg-slate-800/80" />
           <div className="rounded-2xl border border-slate-800/70 bg-slate-900/50 px-4 py-3 text-xs text-slate-400">
-            Atajo ropido para explorar la jornada y tus ratings.
+            {t('matches.subtitle')}
           </div>
         </div>
       </aside>

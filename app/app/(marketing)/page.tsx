@@ -1,8 +1,27 @@
+'use client';
+
 import Link from 'next/link';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import LandingRedirect from './landing-redirect';
 
 export default function Page() {
+  const { t } = useLanguage();
+  const features = [
+    {
+      title: t('marketing.feature1.title'),
+      copy: t('marketing.feature1.copy'),
+    },
+    {
+      title: t('marketing.feature2.title'),
+      copy: t('marketing.feature2.copy'),
+    },
+    {
+      title: t('marketing.feature3.title'),
+      copy: t('marketing.feature3.copy'),
+    },
+  ];
+
   return (
     <>
       <LandingRedirect />
@@ -12,11 +31,10 @@ export default function Page() {
             BallBoxd
           </p>
           <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
-            Valora partidos como experiencias compartidas.
+            {t('marketing.title')}
           </h1>
           <p className="max-w-2xl text-lg text-slate-300">
-            Una plataforma para puntuar partidos por entretenimiento, ritmo y
-            emocion. Menos estadisticas, mas memoria colectiva.
+            {t('marketing.subtitle')}
           </p>
         </header>
 
@@ -25,31 +43,18 @@ export default function Page() {
             href="/home"
             className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
           >
-            Entrar a home
+            {t('marketing.cta.enterHome')}
           </Link>
           <Link
             href="/matches/placeholder"
             className="rounded-full border border-slate-700 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
           >
-            Ver un partido
+            {t('marketing.cta.viewMatch')}
           </Link>
         </section>
 
         <section className="grid gap-6 md:grid-cols-3">
-          {[
-            {
-              title: 'Puntajes 0-100',
-              copy: 'Resume la experiencia general del partido.',
-            },
-            {
-              title: 'Contexto del espectador',
-              copy: 'Cuanto viste y desde donde se mira el futbol.',
-            },
-            {
-              title: 'Memoria colectiva',
-              copy: 'Resenas cortas y figura del partido.',
-            },
-          ].map((item) => (
+          {features.map((item) => (
             <div
               key={item.title}
               className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6"

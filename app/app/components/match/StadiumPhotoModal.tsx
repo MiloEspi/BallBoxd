@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import { processSquareImage } from '@/app/lib/image';
 
 type StadiumPhotoModalProps = {
@@ -19,6 +20,7 @@ export default function StadiumPhotoModal({
   onClose,
   onConfirm,
 }: StadiumPhotoModalProps) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState('');
@@ -51,7 +53,7 @@ export default function StadiumPhotoModal({
       return;
     }
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setError('Please upload a JPG or PNG image.');
+      setError(t('image.upload.formatError'));
       event.target.value = '';
       return;
     }
@@ -63,9 +65,9 @@ export default function StadiumPhotoModal({
       setPendingName(file.name);
     } catch (err) {
       if (err instanceof Error && err.message.includes('Minimo')) {
-        setError(`Image too small. Minimum size is ${MIN_SIZE}x${MIN_SIZE}.`);
+        setError(t('image.upload.tooSmall', { size: MIN_SIZE }));
       } else {
-        setError(err instanceof Error ? err.message : 'No pudimos cargar la imagen.');
+        setError(err instanceof Error ? err.message : t('image.upload.error'));
       }
     } finally {
       setProcessing(false);
@@ -85,7 +87,7 @@ export default function StadiumPhotoModal({
       setPendingName('');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar.');
+      setError(err instanceof Error ? err.message : t('common.saveError'));
     } finally {
       setSaving(false);
     }
@@ -115,28 +117,25 @@ export default function StadiumPhotoModal({
           <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                Estuve en la cancha
+                {t('stadium.title')}
               </p>
               <h2 className="text-base font-semibold text-white">
-                Subir foto desde tu lugar
+                {t('stadium.subtitle')}
               </h2>
             </div>
             <button
               className="text-xs uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
               type="button"
               onClick={onClose}
-              aria-label="Cerrar"
-              title="Cerrar"
+              aria-label={t('common.close')}
+              title={t('common.close')}
             >
               X
             </button>
           </div>
 
           <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-5 py-5">
-            <p className="text-sm text-slate-400">
-              Elegi una foto cuadrada desde la tribuna. Esta imagen es secundaria
-              y solo aparece como miniatura en tu perfil.
-            </p>
+            <p className="text-sm text-slate-400">{t('stadium.description')}</p>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -145,10 +144,10 @@ export default function StadiumPhotoModal({
                 onClick={handlePick}
                 disabled={processing || saving}
               >
-                {processing ? 'Procesando...' : 'Seleccionar archivo'}
+                {processing ? t('stadium.processing') : t('stadium.selectFile')}
               </button>
               <span className="text-xs text-slate-500">
-                JPG o PNG - Minimo {MIN_SIZE}px
+                {t('stadium.fileHint', { size: MIN_SIZE })}
               </span>
             </div>
 
@@ -156,12 +155,12 @@ export default function StadiumPhotoModal({
               {pending ? (
                 <img
                   src={pending}
-                  alt="Vista previa"
+                  alt={t('stadium.preview')}
                   className="h-full w-full object-cover"
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Sin vista previa
+                  {t('stadium.noPreview')}
                 </div>
               )}
             </div>
@@ -169,14 +168,15 @@ export default function StadiumPhotoModal({
             {pending && (
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="uppercase tracking-[0.2em]">
-                  Vista previa{pendingName ? ` - ${pendingName}` : ''}
+                  {t('stadium.preview')}
+                  {pendingName ? ` - ${pendingName}` : ''}
                 </span>
                 <button
                   className="text-[10px] uppercase tracking-[0.2em] text-slate-400 transition hover:text-slate-200"
                   type="button"
                   onClick={handleDiscard}
                 >
-                  Descartar
+                  {t('stadium.discard')}
                 </button>
               </div>
             )}
@@ -195,7 +195,7 @@ export default function StadiumPhotoModal({
               onClick={onClose}
               disabled={saving}
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button
               className="rounded-full bg-emerald-300 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-70"
@@ -203,7 +203,7 @@ export default function StadiumPhotoModal({
               onClick={handleConfirm}
               disabled={!pending || saving}
             >
-              {saving ? 'Guardando...' : 'Confirmar imagen'}
+              {saving ? t('stadium.saving') : t('stadium.confirm')}
             </button>
           </div>
         </div>

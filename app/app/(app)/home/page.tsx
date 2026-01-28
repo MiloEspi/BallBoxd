@@ -2,17 +2,26 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import FriendsActivityCard from '@/app/components/feed/FriendsActivityCard';
 import MatchCard from '@/app/components/match/MatchCard';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
+import CalendarModal from '@/app/components/ui/CalendarModal';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import SkeletonMatchCard from '@/app/components/ui/SkeletonMatchCard';
 import { ApiError, fetchFeed, fetchFriendsFeed, fetchMe } from '@/app/lib/api';
+import { getLocale } from '@/app/lib/i18n';
+import { sortMatchesByClosest, sortMatchesByDateAsc } from '@/app/lib/match-sort';
 import type { FriendsFeedItem, Match } from '@/app/lib/types';
-import { addDays, startOfDay } from '@/app/lib/date-range';
+import { addDays, endOfDay, isSameDay, startOfDay } from '@/app/lib/date-range';
 
 type ErrorState = {
   message: string;
@@ -22,6 +31,8 @@ type ErrorState = {
 // Home page with friends activity + team matches feed.
 export default function Page() {
   const router = useRouter();
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const [items, setItems] = useState<FriendsFeedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ErrorState | null>(null);
@@ -32,6 +43,9 @@ export default function Page() {
   const [matchFilter, setMatchFilter] = useState<'today' | 'week' | 'all'>(
     'today',
   );
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => today);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState<ErrorState | null>(null);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
@@ -53,12 +67,12 @@ export default function Page() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError({
-          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          message: t('common.sessionExpired'),
           action: 'login',
         });
       } else {
         setError({
-          message: 'No pudimos cargar la actividad.',
+          message: t('common.loadError'),
           action: 'retry',
         });
       }
@@ -76,12 +90,12 @@ export default function Page() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setTeamError({
-          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          message: t('common.sessionExpired'),
           action: 'login',
         });
       } else {
         setTeamError({
-          message: 'No pudimos cargar los partidos.',
+          message: t('common.loadError'),
           action: 'retry',
         });
       }
@@ -116,70 +130,65 @@ export default function Page() {
   const emptyState = useMemo(
     () => (
       <StateEmpty
-        title="Tu feed de amigos esta vacio."
-        description="Segui a 2-3 amigos para ver sus ratings y reviews."
-        actionLabel="Buscar amigos"
+        title={t('home.friends.emptyTitle')}
+        description={t('home.friends.emptyDesc')}
+        actionLabel={t('home.friends.cta')}
         onAction={() => router.push('/amigos')}
       />
     ),
-    [router],
+    [router, t],
   );
 
   const filteredMatches = useMemo(() => {
+    const anchorDate = startOfDay(selectedDate);
     if (matchFilter === 'all') {
-      return [...teamMatches].sort(
-        (a, b) =>
-          new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
-      );
+      return sortMatchesByClosest(teamMatches, new Date());
     }
-    const today = startOfDay(new Date());
     if (matchFilter === 'today') {
-      return teamMatches
-        .filter((match) => {
-          const matchDate = startOfDay(new Date(match.date_time));
-          return matchDate.getTime() === today.getTime();
-        })
-        .sort(
-          (a, b) =>
-            new Date(b.date_time).getTime() -
-            new Date(a.date_time).getTime(),
-        );
-    }
-    const weekEnd = addDays(today, 6);
-    return teamMatches
-      .filter((match) => {
-        const matchDate = new Date(match.date_time);
-        return matchDate >= today && matchDate <= weekEnd;
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.date_time).getTime() - new Date(a.date_time).getTime(),
+      return sortMatchesByDateAsc(
+        teamMatches.filter((match) =>
+          isSameDay(new Date(match.date_time), anchorDate),
+        ),
       );
-  }, [matchFilter, teamMatches]);
+    }
+    const weekEnd = endOfDay(addDays(anchorDate, 6));
+    return sortMatchesByDateAsc(
+      teamMatches.filter((match) => {
+        const matchDate = new Date(match.date_time);
+        return matchDate >= anchorDate && matchDate <= weekEnd;
+      }),
+    );
+  }, [matchFilter, selectedDate, teamMatches]);
+
+  const dateLabel = useMemo(
+    () =>
+      selectedDate.toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+    [locale, selectedDate],
+  );
 
   return (
     <section className="space-y-10">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Home</h1>
-        <p className="text-sm text-slate-400">
-          Actividad social y partidos de tus equipos.
-        </p>
+        <h1 className="text-2xl font-semibold">{t('home.title')}</h1>
+        <p className="text-sm text-slate-400">{t('home.subtitle')}</p>
       </header>
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Actividad de amigos</h2>
-            <p className="text-sm text-slate-400">
-              Lo ultimo que vieron tus amigos.
-            </p>
+            <h2 className="text-lg font-semibold">{t('home.friends.title')}</h2>
+            <p className="text-sm text-slate-400">{t('home.friends.subtitle')}</p>
           </div>
           <button
             type="button"
             className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
             onClick={() => router.push('/search?tab=users')}
           >
-            Buscar amigos
+            {t('home.friends.cta')}
           </button>
         </div>
 
@@ -194,7 +203,7 @@ export default function Page() {
         {!loading && error && (
           <StateError
             message={error.message}
-            actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+            actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
             onAction={
               error.action === 'login'
                 ? () => router.push('/login')
@@ -209,27 +218,27 @@ export default function Page() {
             {profileLink && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Comparte tu perfil
+                  {t('home.shareProfile')}
                 </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
-                      {profileLink}
-                    </span>
-                    <button
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="rounded-full border border-slate-700/70 bg-slate-950/60 px-3 py-1 text-xs text-slate-200">
+                    {profileLink}
+                  </span>
+                  <button
                     type="button"
                     className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
-                      onClick={() => navigator.clipboard.writeText(profileLink)}
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                  <p className="mt-3 text-xs text-slate-500">
-                    Mandalo por WhatsApp a tu grupo.
-                  </p>
+                    onClick={() => navigator.clipboard.writeText(profileLink)}
+                  >
+                    {t('home.share.copy')}
+                  </button>
                 </div>
-              )}
-            </div>
-          )}
+                <p className="mt-3 text-xs text-slate-500">
+                  {t('home.share.caption')}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {!loading && !error && items.length > 0 && (
           <div className="space-y-4">
@@ -249,7 +258,7 @@ export default function Page() {
                 className="w-full rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
                 onClick={() => loadFeed(friendsPage + 1)}
               >
-                Ver mas
+                {t('common.viewAll')}
               </button>
             )}
           </div>
@@ -259,25 +268,70 @@ export default function Page() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Feed de partidos</h2>
-            <p className="text-sm text-slate-400">
-              Partidos de equipos que seguis.
-            </p>
+            <h2 className="text-lg font-semibold">{t('home.matches.title')}</h2>
+            <p className="text-sm text-slate-400">{t('home.matches.subtitle')}</p>
           </div>
           <button
             type="button"
             className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 transition hover:border-slate-500"
             onClick={() => router.push('/feed')}
           >
-            Ver todo
+            {t('home.matches.viewAll')}
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1.5">
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
+              onClick={() =>
+                setSelectedDate(startOfDay(addDays(selectedDate, -1)))
+              }
+              aria-label={t('date.yesterday')}
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              className="flex items-center gap-2 px-2 text-sm font-semibold text-slate-100"
+              onClick={() => setCalendarOpen(true)}
+              aria-label={t('matches.toolbar.today')}
+            >
+              <span className="min-w-[120px] text-center">{dateLabel}</span>
+              {isSameDay(selectedDate, today) && (
+                <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200 ring-1 ring-emerald-300/30">
+                  {t('matches.toolbar.today')}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
+              onClick={() =>
+                setSelectedDate(startOfDay(addDays(selectedDate, 1)))
+              }
+              aria-label={t('date.tomorrow')}
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 active:scale-95"
+              onClick={() => setCalendarOpen(true)}
+              aria-label={t('matches.toolbar.today')}
+            >
+              <CalendarIcon className="h-5 w-5" />
+            </button>
+          </div>
+
           {[
-            { key: 'today', label: 'Hoy' },
-            { key: 'week', label: 'Esta semana' },
-            { key: 'all', label: 'Todos' },
+            { key: 'today', label: t('home.matches.filter.today') },
+            { key: 'week', label: t('home.matches.filter.week') },
+            { key: 'all', label: t('home.matches.filter.all') },
           ].map((item) => {
             const active = matchFilter === item.key;
             return (
@@ -308,7 +362,7 @@ export default function Page() {
         {!teamLoading && teamError && (
           <StateError
             message={teamError.message}
-            actionLabel={teamError.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+            actionLabel={teamError.action === 'login' ? t('nav.login') : t('common.retry')}
             onAction={
               teamError.action === 'login'
                 ? () => router.push('/login')
@@ -319,9 +373,9 @@ export default function Page() {
 
         {!teamLoading && !teamError && filteredMatches.length === 0 && (
           <StateEmpty
-            title="Todavia no seguis equipos."
-            description="Segui equipos para ver sus partidos aca."
-            actionLabel="Explorar equipos"
+            title={t('home.matches.emptyTitle')}
+            description={t('home.matches.emptyDesc')}
+            actionLabel={t('home.matches.emptyCta')}
             onAction={() => router.push('/teams')}
           />
         )}
@@ -358,6 +412,15 @@ export default function Page() {
           }}
         />
       )}
+
+      <CalendarModal
+        open={calendarOpen}
+        selected={selectedDate}
+        onSelect={(date) => {
+          setSelectedDate(startOfDay(date));
+        }}
+        onClose={() => setCalendarOpen(false)}
+      />
     </section>
   );
 }

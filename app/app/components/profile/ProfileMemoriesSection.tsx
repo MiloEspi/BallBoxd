@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import FeaturedMatchCard from '@/app/components/profile/FeaturedMatchCard';
 import FeaturedMatchEditorModal from '@/app/components/profile/FeaturedMatchEditorModal';
 import FeaturedMatchSelectorModal from '@/app/components/profile/FeaturedMatchSelectorModal';
@@ -24,6 +25,7 @@ type ProfileMemoriesSectionProps = {
 export default function ProfileMemoriesSection({
   username,
 }: ProfileMemoriesSectionProps) {
+  const { t } = useLanguage();
   const [data, setData] = useState<ProfileMemoriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +41,12 @@ export default function ProfileMemoriesSection({
   );
 
   const featuredMatches = useMemo(
-    () => (data?.results ?? []).slice().sort((a, b) => {
-      const left = a.featured_order ?? 0;
-      const right = b.featured_order ?? 0;
-      return left - right;
-    }),
+    () =>
+      (data?.results ?? []).slice().sort((a, b) => {
+        const left = a.featured_order ?? 0;
+        const right = b.featured_order ?? 0;
+        return left - right;
+      }),
     [data],
   );
 
@@ -54,7 +57,7 @@ export default function ProfileMemoriesSection({
       const response = await fetchProfileMemories(username);
       setData(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos cargar.');
+      setError(err instanceof Error ? err.message : t('profile.memories.loadError'));
     } finally {
       setLoading(false);
     }
@@ -105,7 +108,7 @@ export default function ProfileMemoriesSection({
       await removeProfileMemory(username, matchId);
       await loadMemories();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos eliminar.');
+      setError(err instanceof Error ? err.message : t('profile.memories.removeError'));
     }
   };
 
@@ -147,9 +150,7 @@ export default function ProfileMemoriesSection({
       const next = [...current];
       const [moved] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, moved);
-      setData((prev) =>
-        prev ? { ...prev, results: next } : prev,
-      );
+      setData((prev) => (prev ? { ...prev, results: next } : prev));
       setDraggingId(null);
       setDragOverId(null);
       setReordering(true);
@@ -160,7 +161,7 @@ export default function ProfileMemoriesSection({
         );
         setData(response);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'No pudimos reordenar.');
+        setError(err instanceof Error ? err.message : t('profile.memories.reorderError'));
         await loadMemories();
       } finally {
         setReordering(false);
@@ -172,16 +173,17 @@ export default function ProfileMemoriesSection({
     setDragOverId(null);
   };
 
+  const title = isOwner ? t('profile.memories.titleOwner') : t('profile.memories.title');
+  const description = isOwner ? t('profile.memories.descOwner') : t('profile.memories.desc');
+
   if (loading) {
     return (
       <section className="space-y-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Mis partidos
+            {title}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Partidos que me marcaron
-          </p>
+          <p className="mt-1 text-xs text-slate-400">{description}</p>
         </div>
         <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -197,7 +199,7 @@ export default function ProfileMemoriesSection({
       <section className="space-y-4">
         <StateError
           message={error}
-          actionLabel="Reintentar"
+          actionLabel={t('common.retry')}
           onAction={loadMemories}
         />
       </section>
@@ -209,11 +211,9 @@ export default function ProfileMemoriesSection({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Mis partidos
+            {title}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Partidos que me marcaron
-          </p>
+          <p className="mt-1 text-xs text-slate-400">{description}</p>
         </div>
         {isOwner && (
           <button
@@ -222,7 +222,7 @@ export default function ProfileMemoriesSection({
             onClick={() => setShowSelector(true)}
             disabled={reordering}
           >
-            Agregar a Mis partidos
+            {t('profile.memories.add')}
           </button>
         )}
       </div>
@@ -263,10 +263,10 @@ export default function ProfileMemoriesSection({
                     type="button"
                     onClick={() => setShowSelector(true)}
                   >
-                    Agregar partido
+                    {t('profile.memories.addMatch')}
                   </button>
                 ) : (
-                  <span>Sin partido</span>
+                  <span>{t('profile.memories.empty')}</span>
                 )}
               </div>
             </div>

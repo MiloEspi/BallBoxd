@@ -36,18 +36,18 @@ export const getStatusMeta = (
     : { label: 'PENDING', tone: 'pending' };
 };
 
-export const formatKickoff = (value: string) => {
+export const formatKickoff = (value: string, locale: string = 'en-US') => {
   const date = new Date(value);
   return {
-    dateLabel: date.toLocaleDateString('en-US', {
+    dateLabel: date.toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
     }),
-    timeLabel: date.toLocaleTimeString('en-US', {
+    timeLabel: date.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
     }),
-    fullLabel: date.toLocaleDateString('en-US', {
+    fullLabel: date.toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',

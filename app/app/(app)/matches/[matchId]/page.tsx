@@ -4,14 +4,17 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
 import ReviewItem from '@/app/components/reviews/ReviewItem';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
 import MatchMemoryPanel from '@/app/components/match/MatchMemoryPanel';
+import TeamLogo from '@/app/components/ui/TeamLogo';
 import { ApiError, fetchMatchDetail } from '@/app/lib/api';
 import { formatKickoff, getStatusMeta } from '@/app/lib/match-ui';
+import { getLocale } from '@/app/lib/i18n';
 import type { MatchDetailResponse } from '@/app/lib/types';
 
 type MatchPageProps = {
@@ -23,18 +26,11 @@ type ErrorState = {
   action: 'retry' | 'login';
 };
 
-const getTeamInitials = (name: string) => {
-  return name
-    .split(' ')
-    .map((word) => word[0])
-    .slice(0, 3)
-    .join('')
-    .toUpperCase();
-};
-
 // Match detail page with stats and reviews.
 export default function Page({ params }: MatchPageProps) {
   const router = useRouter();
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const { matchId: matchIdParam } = use(params);
   const [data, setData] = useState<MatchDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +47,7 @@ export default function Page({ params }: MatchPageProps) {
   const loadMatch = async () => {
     if (Number.isNaN(matchId)) {
       setError({
-        message: 'No pudimos cargar los datos.',
+        message: t('common.loadError'),
         action: 'retry',
       });
       setLoading(false);
@@ -66,12 +62,12 @@ export default function Page({ params }: MatchPageProps) {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError({
-          message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+          message: t('common.sessionExpired'),
           action: 'login',
         });
       } else {
         setError({
-          message: 'No pudimos cargar los datos.',
+          message: t('common.loadError'),
           action: 'retry',
         });
       }
@@ -111,7 +107,7 @@ export default function Page({ params }: MatchPageProps) {
       <section className="space-y-6">
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login'
               ? () => router.push('/login')
@@ -126,7 +122,7 @@ export default function Page({ params }: MatchPageProps) {
     return (
       <section className="space-y-6">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-          No match data found.
+          {t('search.page.empty')}
         </div>
       </section>
     );
@@ -141,7 +137,7 @@ export default function Page({ params }: MatchPageProps) {
       : avg_score.toFixed(1)
     : '-';
   const ringPercent = Math.min(100, Math.max(0, avg_score));
-  const { fullLabel, timeLabel } = formatKickoff(match.date_time);
+  const { fullLabel, timeLabel } = formatKickoff(match.date_time, locale);
   const statusMeta = getStatusMeta(match.status, match.date_time);
   const statusToneStyles: Record<typeof statusMeta.tone, string> = {
     live: 'bg-rose-500/15 text-rose-200 border-rose-400/40 shadow-[0_0_20px_rgba(244,63,94,0.35)]',
@@ -157,10 +153,27 @@ export default function Page({ params }: MatchPageProps) {
       'bg-slate-600/20 text-slate-200 border-slate-500/40 shadow-[0_0_18px_rgba(148,163,184,0.2)]',
   };
   const statusClass = statusToneStyles[statusMeta.tone] ?? statusToneStyles.neutral;
+  const statusLabels: Record<string, string> = {
+    LIVE: t('status.live'),
+    FINISHED: t('status.finished'),
+    PENDING: t('status.pending'),
+    PAUSED: t('status.paused'),
+    POSTPONED: t('status.postponed'),
+    SUSPENDED: t('status.suspended'),
+    CANCELLED: t('status.cancelled'),
+  };
+  const statusLabel = statusLabels[statusMeta.label] ?? statusMeta.label;
+  const watchabilityConfidenceLabel = match.watchability_confidence
+    ? ({
+        Low: t('match.confidence.low'),
+        Medium: t('match.confidence.medium'),
+        High: t('match.confidence.high'),
+      }[match.watchability_confidence] ?? match.watchability_confidence)
+    : null;
   const watchabilityValue =
     match.watchability_score !== null && match.watchability_score !== undefined
       ? `${match.watchability_score}${
-          match.watchability_confidence ? ` (${match.watchability_confidence})` : ''
+          watchabilityConfidenceLabel ? ` (${watchabilityConfidenceLabel})` : ''
         }`
       : '-';
 
@@ -180,7 +193,7 @@ export default function Page({ params }: MatchPageProps) {
           <span
             className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${statusClass}`}
           >
-            {statusMeta.label}
+            {statusLabel}
           </span>
         </div>
         <h1 className="text-3xl font-semibold text-white">
@@ -202,7 +215,9 @@ export default function Page({ params }: MatchPageProps) {
           {fullLabel} - {timeLabel}
         </div>
         {match.venue && (
-          <p className="text-sm text-slate-400">Venue: {match.venue}</p>
+          <p className="text-sm text-slate-400">
+            {t('matchDetail.venue')}: {match.venue}
+          </p>
         )}
       </header>
 
@@ -210,45 +225,36 @@ export default function Page({ params }: MatchPageProps) {
         <div className="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
           <div className="space-y-4">
             <p className="text-sm uppercase tracking-[0.2em] text-slate-400">
-              Score
+              {t('matchDetail.score')}
             </p>
             <div className="space-y-4">
-              {[{ team: match.home_team, score: match.home_score }, { team: match.away_team, score: match.away_score }].map(
-                ({ team, score }) => (
-                  <div
-                    key={team.id}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/70 bg-slate-950/50 px-4 py-3"
+              {[
+                { team: match.home_team, score: match.home_score },
+                { team: match.away_team, score: match.away_score },
+              ].map(({ team, score }) => (
+                <div
+                  key={team.id}
+                  className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800/70 bg-slate-950/50 px-4 py-3"
+                >
+                  <Link
+                    href={`/teams/${team.id}`}
+                    className="flex items-center gap-3 text-left text-slate-100 transition hover:text-white"
                   >
-                    <Link
-                      href={`/teams/${team.id}`}
-                      className="flex items-center gap-3 text-left text-slate-100 transition hover:text-white"
-                    >
-                      <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-200">
-                        {team.logo_url ? (
-                          <img
-                            src={team.logo_url}
-                            alt={team.name}
-                            className="h-full w-full object-contain p-2"
-                          />
-                        ) : (
-                          getTeamInitials(team.name)
-                        )}
-                      </span>
-                      <span className="text-lg font-semibold">{team.name}</span>
-                    </Link>
-                    <span className="text-3xl font-semibold text-white">
-                      {score}
-                    </span>
-                  </div>
-                ),
-              )}
+                    <TeamLogo name={team.name} logoUrl={team.logo_url} size="lg" />
+                    <span className="text-lg font-semibold">{team.name}</span>
+                  </Link>
+                  <span className="text-3xl font-semibold text-white">
+                    {score}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="flex flex-col gap-5">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                Average rating
+                {t('matchDetail.avgRating')}
               </p>
               <div className="mt-4 flex items-center gap-4">
                 <div className="relative">
@@ -268,11 +274,13 @@ export default function Page({ params }: MatchPageProps) {
                 </div>
                 <div>
                   <div className="text-sm font-semibold text-slate-100">
-                    {hasRatings ? `${ratingCount} ratings` : 'No ratings yet'}
+                    {hasRatings
+                      ? t('match.ratings', { count: ratingCount })
+                      : t('matchDetail.noRatings')}
                   </div>
                   {!hasRatings && (
                     <div className="mt-1 text-xs text-slate-500">
-                      There are no ratings yet.
+                      {t('matchDetail.noRatingsHint')}
                     </div>
                   )}
                 </div>
@@ -283,7 +291,7 @@ export default function Page({ params }: MatchPageProps) {
               {my_rating && (
                 <div className="text-center">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Your rating
+                    {t('match.yourRating')}
                   </p>
                   <div className="mt-2 flex h-10 w-10 items-center justify-center rounded-full bg-sky-300 text-sm font-semibold text-slate-900">
                     {my_rating.score}
@@ -301,7 +309,7 @@ export default function Page({ params }: MatchPageProps) {
                   });
                 }}
               >
-                {my_rating ? 'Update rating' : 'Rate match'}
+                {my_rating ? t('common.update') : t('common.rate')}
               </button>
             </div>
 
@@ -320,20 +328,20 @@ export default function Page({ params }: MatchPageProps) {
       <div className="grid gap-4 md:grid-cols-3">
         {[
           {
-            label: 'Total ratings',
+            label: t('profile.stats.totalRatings'),
             value: hasRatings ? String(ratingCount) : '-',
           },
           {
-            label: 'Full watched %',
+            label: t('matchDetail.fullWatched'),
             value: hasRatings ? `${full_watched_pct}%` : '-',
           },
           {
-            label: 'Watchability',
+            label: t('matchDetail.watchability'),
             value: watchabilityValue,
           },
           {
-            label: 'Kickoff status',
-            value: statusMeta.label,
+            label: t('matchDetail.kickoffStatus'),
+            value: statusLabel,
           },
         ].map((stat) => (
           <div
@@ -352,11 +360,13 @@ export default function Page({ params }: MatchPageProps) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Highlighted reviews</h2>
+          <h2 className="text-lg font-semibold">
+            {t('matchDetail.highlightedReviews')}
+          </h2>
           {data.featured_reviews.length === 0 ? (
             <StateEmpty
-              title="Todavia no hay resenas. Se el primero."
-              actionLabel="Rate match"
+              title={t('matchDetail.reviews.empty')}
+              actionLabel={t('common.rate')}
               onAction={() => openRateModal()}
             />
           ) : (
@@ -369,10 +379,12 @@ export default function Page({ params }: MatchPageProps) {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Friends opinions</h2>
+          <h2 className="text-lg font-semibold">
+            {t('matchDetail.friendsOpinions')}
+          </h2>
           {data.followed_ratings.length === 0 ? (
             <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">
-              No ratings from friends yet.
+              {t('matchDetail.friends.empty')}
             </div>
           ) : (
             <div className="space-y-3">

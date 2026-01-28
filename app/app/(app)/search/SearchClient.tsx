@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import MatchResultCard from '@/app/components/search/MatchResultCard';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
@@ -22,14 +23,6 @@ type ErrorState = {
   action: 'retry' | 'login';
 };
 
-const TABS = [
-  { key: 'all', label: 'Todo' },
-  { key: 'users', label: 'Usuarios' },
-  { key: 'teams', label: 'Equipos' },
-  { key: 'leagues', label: 'Ligas' },
-  { key: 'matches', label: 'Partidos' },
-];
-
 const tabToTypes = (tab: string) => {
   if (tab === 'users') return ['users'];
   if (tab === 'teams') return ['teams'];
@@ -41,10 +34,19 @@ const tabToTypes = (tab: string) => {
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const query = searchParams.get('q') ?? '';
   const tab = searchParams.get('tab') ?? 'all';
   const page = Math.max(Number(searchParams.get('page') ?? 1) || 1, 1);
   const leagueId = searchParams.get('league_id') ?? undefined;
+
+  const tabs = [
+    { key: 'all', label: t('matches.toolbar.status.all') },
+    { key: 'users', label: t('search.page.tabs.users') },
+    { key: 'teams', label: t('search.page.tabs.teams') },
+    { key: 'leagues', label: t('search.page.tabs.leagues') },
+    { key: 'matches', label: t('search.page.tabs.matches') },
+  ];
 
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,18 +98,18 @@ export default function SearchClient() {
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
           setError({
-            message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+            message: t('common.sessionExpired'),
             action: 'login',
           });
         } else {
           setError({
-            message: 'No pudimos cargar los datos.',
+            message: t('common.loadError'),
             action: 'retry',
           });
         }
       })
       .finally(() => setLoading(false));
-  }, [query, tab, page, leagueId]);
+  }, [query, tab, page, leagueId, t]);
 
   const hasResults = useMemo(() => {
     if (!data) {
@@ -136,20 +138,22 @@ export default function SearchClient() {
             <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
             <input
               className="w-full bg-transparent text-sm text-slate-100 outline-none"
-              placeholder="Buscar usuarios, equipos, ligas o partidos..."
+              placeholder={t('search.page.placeholder')}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              aria-label="Buscar"
+              aria-label={t('nav.search')}
             />
           </div>
           <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            {query ? `Resultados para "${query}"` : 'Busca algo'}
+            {query
+              ? t('search.page.resultsFor', { query })
+              : t('search.page.searchPrompt')}
           </div>
         </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
-        {TABS.map((item) => {
+        {tabs.map((item) => {
           const isActive = tab === item.key;
           return (
             <button
@@ -179,7 +183,7 @@ export default function SearchClient() {
       {!loading && error && (
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login'
               ? () => router.push('/login')
@@ -190,16 +194,16 @@ export default function SearchClient() {
 
       {!loading && !error && (!query || !data) && (
         <StateEmpty
-          title="Ingresa una busqueda para ver resultados."
-          description="Podes buscar usuarios, equipos, ligas o partidos."
+          title={t('search.page.empty')}
+          description={t('search.page.placeholder')}
         />
       )}
 
       {!loading && !error && query && data && !hasResults && (
         <StateEmpty
-          title={`Sin resultados para "${data.q}".`}
-          description={leagueId ? 'Proba con otra liga.' : undefined}
-          actionLabel={leagueId ? 'Probar otra liga' : undefined}
+          title={t('search.empty', { query: data.q })}
+          description={leagueId ? t('matches.toolbar.league') : undefined}
+          actionLabel={leagueId ? t('common.clear') : undefined}
           onAction={leagueId ? () => updateQuery({ league_id: null }) : undefined}
         />
       )}
@@ -209,7 +213,7 @@ export default function SearchClient() {
           {(tab === 'all' || tab === 'users') &&
             data.results.users.length > 0 && (
               <SearchSection
-                title="Usuarios"
+                title={t('search.page.tabs.users')}
                 items={data.results.users}
                 renderItem={(user: UserMini) => (
                   <button
@@ -222,7 +226,7 @@ export default function SearchClient() {
                       @{user.username}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                      Usuario
+                      {t('search.hint.user')}
                     </p>
                   </button>
                 )}
@@ -231,7 +235,7 @@ export default function SearchClient() {
 
           {(tab === 'all' || tab === 'teams') && data.results.teams.length > 0 && (
             <SearchSection
-              title="Equipos"
+              title={t('search.page.tabs.teams')}
               items={data.results.teams}
               renderItem={(team: Team) => (
                 <button
@@ -249,35 +253,37 @@ export default function SearchClient() {
             />
           )}
 
-          {(tab === 'all' || tab === 'leagues') && data.results.leagues.length > 0 && (
-            <SearchSection
-              title="Ligas"
-              items={data.results.leagues}
-              renderItem={(league: League) => (
-                <button
-                  key={league.id}
-                  type="button"
-                  onClick={() => router.push(`/matches?tournament=${league.id}`)}
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left transition hover:border-slate-600"
-                >
-                  <p className="text-base font-semibold text-white">{league.name}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                    {league.country}
-                  </p>
-                </button>
-              )}
-            />
-          )}
+          {(tab === 'all' || tab === 'leagues') &&
+            data.results.leagues.length > 0 && (
+              <SearchSection
+                title={t('search.page.tabs.leagues')}
+                items={data.results.leagues}
+                renderItem={(league: League) => (
+                  <button
+                    key={league.id}
+                    type="button"
+                    onClick={() => router.push(`/matches?tournament=${league.id}`)}
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left transition hover:border-slate-600"
+                  >
+                    <p className="text-base font-semibold text-white">{league.name}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                      {league.country}
+                    </p>
+                  </button>
+                )}
+              />
+            )}
 
-          {(tab === 'all' || tab === 'matches') && data.results.matches.length > 0 && (
-            <SearchSection
-              title="Partidos"
-              items={data.results.matches}
-              renderItem={(match: MatchResult) => (
-                <MatchResultCard key={match.id} match={match} />
-              )}
-            />
-          )}
+          {(tab === 'all' || tab === 'matches') &&
+            data.results.matches.length > 0 && (
+              <SearchSection
+                title={t('search.page.tabs.matches')}
+                items={data.results.matches}
+                renderItem={(match: MatchResult) => (
+                  <MatchResultCard key={match.id} match={match} />
+                )}
+              />
+            )}
         </div>
       )}
 
@@ -289,10 +295,16 @@ export default function SearchClient() {
             onClick={() => updateQuery({ page: Math.max(page - 1, 1) })}
             disabled={page <= 1}
           >
-            Anterior
+            {t('common.prev')}
           </button>
           <span className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Pagina {page}
+            {t('matches.toolbar.page', {
+              current: page,
+              total: Math.max(1, Math.ceil((data?.total ?? 0) / (data?.page_size ?? 1))),
+              start: page,
+              end: page,
+              totalItems: data?.total ?? 0,
+            })}
           </span>
           <button
             type="button"
@@ -300,7 +312,7 @@ export default function SearchClient() {
             onClick={() => updateQuery({ page: page + 1 })}
             disabled={!hasNext}
           >
-            Siguiente
+            {t('common.next')}
           </button>
         </div>
       )}
@@ -314,11 +326,13 @@ type SearchSectionProps<T> = {
   renderItem: (item: T) => ReactNode;
 };
 
-const SearchSection = <T,>({ title, items, renderItem }: SearchSectionProps<T>) => (
+const SearchSection = <T,>({
+  title,
+  items,
+  renderItem,
+}: SearchSectionProps<T>) => (
   <section className="space-y-4">
     <h2 className="text-lg font-semibold">{title}</h2>
-    <div className="grid gap-4 lg:grid-cols-2">
-      {items.map(renderItem)}
-    </div>
+    <div className="grid gap-4 lg:grid-cols-2">{items.map(renderItem)}</div>
   </section>
 );

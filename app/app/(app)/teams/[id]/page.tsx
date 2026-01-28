@@ -3,11 +3,13 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import MatchCard from '@/app/components/match/MatchCard';
 import RateMatchModal from '@/app/components/match/RateMatchModal';
 import SkeletonBlock from '@/app/components/ui/SkeletonBlock';
 import StateEmpty from '@/app/components/ui/StateEmpty';
 import StateError from '@/app/components/ui/StateError';
+import TeamLogo from '@/app/components/ui/TeamLogo';
 import {
   ApiError,
   fetchTeamDetail,
@@ -26,14 +28,9 @@ type ErrorState = {
   action: 'retry' | 'login';
 };
 
-const SCOPE_OPTIONS = [
-  { value: 'recent', label: 'Recientes' },
-  { value: 'upcoming', label: 'Proximos' },
-  { value: 'all', label: 'Todos' },
-] as const;
-
 export default function Page({ params }: TeamPageProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { id } = use(params);
   const teamId = Number(id);
   const [team, setTeam] = useState<Team | null>(null);
@@ -48,6 +45,12 @@ export default function Page({ params }: TeamPageProps) {
     x: number;
     y: number;
   } | null>(null);
+
+  const SCOPE_OPTIONS = [
+    { value: 'recent', label: t('team.scope.recent') },
+    { value: 'upcoming', label: t('team.scope.upcoming') },
+    { value: 'all', label: t('team.scope.all') },
+  ] as const;
 
   const sortTeamMatches = (
     list: Match[],
@@ -96,19 +99,19 @@ export default function Page({ params }: TeamPageProps) {
   const resolveError = (err: unknown): ErrorState => {
     if (err instanceof ApiError && err.status === 401) {
       return {
-        message: 'Tu sesion expiro. Inicia sesion de nuevo.',
+        message: t('common.sessionExpired'),
         action: 'login',
       };
     }
     return {
-      message: 'No pudimos cargar los datos.',
+      message: t('common.loadError'),
       action: 'retry',
     };
   };
 
   const loadTeam = async () => {
     if (Number.isNaN(teamId)) {
-      setError({ message: 'No pudimos cargar los datos.', action: 'retry' });
+      setError({ message: t('common.loadError'), action: 'retry' });
       setLoading(false);
       return;
     }
@@ -156,7 +159,7 @@ export default function Page({ params }: TeamPageProps) {
       <section className="space-y-6">
         <StateError
           message={error.message}
-          actionLabel={error.action === 'login' ? 'Iniciar sesion' : 'Reintentar'}
+          actionLabel={error.action === 'login' ? t('nav.login') : t('common.retry')}
           onAction={
             error.action === 'login' ? () => router.push('/login') : loadTeam
           }
@@ -168,7 +171,7 @@ export default function Page({ params }: TeamPageProps) {
   if (!team) {
     return (
       <section className="space-y-6">
-        <StateEmpty title="Equipo no encontrado." />
+        <StateEmpty title={t('team.notFound')} />
       </section>
     );
   }
@@ -177,17 +180,11 @@ export default function Page({ params }: TeamPageProps) {
     <section className="space-y-8">
       <header className="relative rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-          Equipo
+          {t('team.title')}
         </p>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {team.logo_url && (
-              <img
-                src={team.logo_url}
-                alt={team.name}
-                className="h-14 w-14 rounded-full border border-white/10 bg-slate-900/80 p-2"
-              />
-            )}
+            <TeamLogo name={team.name} logoUrl={team.logo_url} size="xl" />
             <div>
               <h1 className="text-2xl font-semibold text-white">{team.name}</h1>
               <p className="mt-2 text-sm text-slate-400">
@@ -215,7 +212,9 @@ export default function Page({ params }: TeamPageProps) {
                 current ? { ...current, is_following: next } : current,
               );
               setToastMessage(
-                next ? `Now following ${team.name}` : `Unfollowed ${team.name}`,
+                next
+                  ? t('team.follow.nowFollowing', { team: team.name })
+                  : t('team.follow.unfollowed', { team: team.name }),
               );
               try {
                 if (next) {
@@ -227,17 +226,17 @@ export default function Page({ params }: TeamPageProps) {
                 setTeam((current) =>
                   current ? { ...current, is_following: !next } : current,
                 );
-                setToastMessage('Could not update follow status.');
+                setToastMessage(t('team.follow.error'));
               } finally {
                 setPendingFollow(false);
               }
             }}
           >
             {pendingFollow
-              ? 'Guardando...'
+              ? t('team.follow.saving')
               : team.is_following
-              ? 'Siguiendo'
-              : 'Seguir'}
+                ? t('team.follow.following')
+                : t('team.follow.follow')}
           </button>
         </div>
       </header>
@@ -263,7 +262,7 @@ export default function Page({ params }: TeamPageProps) {
       </div>
 
       {matches.length === 0 ? (
-        <StateEmpty title="No hay partidos para este equipo." />
+        <StateEmpty title={t('team.matches.empty')} />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {matches.map((match) => (

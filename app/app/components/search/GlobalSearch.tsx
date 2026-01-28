@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useLanguage } from '@/app/components/i18n/LanguageProvider';
 import { fetchSearch } from '@/app/lib/api';
+import { getLocale } from '@/app/lib/i18n';
 import type {
   MatchResult,
   SearchResponse,
@@ -22,15 +24,24 @@ type SearchItem = {
 const buildMatchLabel = (match: MatchResult) =>
   `${match.home.name} vs ${match.away.name}`;
 
-const buildMatchHint = (match: MatchResult) =>
-  `${match.league.name} · ${new Date(match.kickoff_at).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })}`;
+const buildMatchHint = (match: MatchResult, locale: string) =>
+  `${match.league.name} · ${new Date(match.kickoff_at).toLocaleDateString(
+    locale,
+    {
+      month: 'short',
+      day: 'numeric',
+    },
+  )}`;
 
 // Global search input with grouped typeahead results.
-export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolean }) {
+export default function GlobalSearch({
+  autoFocus = false,
+}: {
+  autoFocus?: boolean;
+}) {
   const router = useRouter();
+  const { t, language } = useLanguage();
+  const locale = getLocale(language);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -57,7 +68,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
         const response = await fetchSearch({ q: query, page_size: 5, page: 1 });
         setResults(response);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Search failed.');
+        setError(err instanceof Error ? err.message : t('search.error'));
       } finally {
         setLoading(false);
         setActiveIndex(0);
@@ -67,7 +78,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
     return () => {
       window.clearTimeout(handle);
     };
-  }, [query]);
+  }, [query, t]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -91,7 +102,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
       list.push({
         id: `user-${user.id}`,
         label: `@${user.username}`,
-        hint: 'Usuario',
+        hint: t('search.hint.user'),
         href: `/u/${user.username}`,
       });
     });
@@ -115,12 +126,12 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
       list.push({
         id: `match-${match.id}`,
         label: buildMatchLabel(match),
-        hint: buildMatchHint(match),
+        hint: buildMatchHint(match, locale),
         href: `/matches/${match.id}`,
       });
     });
     return list;
-  }, [results]);
+  }, [locale, results, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (!open || items.length === 0) {
@@ -151,12 +162,12 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
     <div ref={containerRef} className="relative w-full max-w-md">
       <input
         className="w-full rounded-full border border-slate-700/70 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-400/60"
-        placeholder="Buscar usuarios, equipos o partidos..."
+        placeholder={t('search.placeholder')}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onFocus={() => query.trim() && setOpen(true)}
         onKeyDown={handleKeyDown}
-        aria-label="Global search"
+        aria-label={t('nav.search')}
         autoFocus={autoFocus}
       />
 
@@ -173,13 +184,11 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
             </div>
           )}
 
-          {!loading && error && (
-            <p className="text-sm text-red-200">{error}</p>
-          )}
+          {!loading && error && <p className="text-sm text-red-200">{error}</p>}
 
           {!loading && !error && results && items.length === 0 && (
             <p className="text-sm text-slate-400">
-              Sin resultados para &quot;{results.q}&quot;.
+              {t('search.empty', { query: results.q })}
             </p>
           )}
 
@@ -187,11 +196,11 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
             <div className="space-y-4">
               {results.results.users.length > 0 && (
                 <SearchGroup
-                  title="Usuarios"
+                  title={t('search.group.users')}
                   items={results.results.users.map((user) => ({
                     id: `user-${user.id}`,
                     label: `@${user.username}`,
-                    hint: 'Perfil',
+                    hint: t('search.hint.profile'),
                     href: `/u/${user.username}`,
                   }))}
                   activeId={items[activeIndex]?.id}
@@ -203,7 +212,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
               )}
               {results.results.teams.length > 0 && (
                 <SearchGroup
-                  title="Equipos"
+                  title={t('search.group.teams')}
                   items={results.results.teams.map((team) => ({
                     id: `team-${team.id}`,
                     label: team.name,
@@ -219,7 +228,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
               )}
               {results.results.leagues.length > 0 && (
                 <SearchGroup
-                  title="Ligas"
+                  title={t('search.group.leagues')}
                   items={results.results.leagues.map((league) => ({
                     id: `league-${league.id}`,
                     label: league.name,
@@ -235,11 +244,11 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
               )}
               {results.results.matches.length > 0 && (
                 <SearchGroup
-                  title="Partidos"
+                  title={t('search.group.matches')}
                   items={results.results.matches.map((match) => ({
                     id: `match-${match.id}`,
                     label: buildMatchLabel(match),
-                    hint: buildMatchHint(match),
+                    hint: buildMatchHint(match, locale),
                     href: `/matches/${match.id}`,
                   }))}
                   activeId={items[activeIndex]?.id}
@@ -257,7 +266,7 @@ export default function GlobalSearch({ autoFocus = false }: { autoFocus?: boolea
                   router.push(`/search?q=${encodeURIComponent(results.q)}`);
                 }}
               >
-                Ver todos los resultados
+                {t('common.searchAll')}
               </button>
             </div>
           )}
@@ -292,9 +301,7 @@ const SearchGroup = ({ title, items, activeId, onSelect }: SearchGroupProps) => 
           }`}
         >
           <div className="font-semibold">{item.label}</div>
-          {item.hint && (
-            <div className="text-xs text-slate-500">{item.hint}</div>
-          )}
+          {item.hint && <div className="text-xs text-slate-500">{item.hint}</div>}
         </button>
       ))}
     </div>
