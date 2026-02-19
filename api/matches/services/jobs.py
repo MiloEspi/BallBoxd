@@ -51,6 +51,7 @@ def import_fixtures_once(
     date_to: date | None = None,
     days_ahead: int | None = None,
     days_back: int | None = None,
+    client: FootballDataClient | None = None,
 ) -> ImportFixturesResult:
     start = time.monotonic()
     now = timezone.now()
@@ -64,7 +65,7 @@ def import_fixtures_once(
         else:
             date_from, date_to = get_default_date_range(now)
 
-    client = FootballDataClient()
+    client = client or FootballDataClient()
     summary = import_matches_global_batched(
         date_from,
         date_to,

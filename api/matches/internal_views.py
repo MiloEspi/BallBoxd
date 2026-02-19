@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 
 from matches.services.football_data import FootballDataError
 from matches.models import Match
+from matches.services.bootstrap import bootstrap_once
 from matches.services.jobs import import_fixtures_once, poll_matches_once
 from matches.services.watchability import compute_watchability
 
@@ -85,6 +86,21 @@ def _parse_leagues(value) -> list[int] | None:
     return league_ids or None
 
 
+def _parse_codes(value) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        items = value
+    else:
+        items = [part.strip() for part in str(value).split(",") if part.strip()]
+    codes: list[str] = []
+    for item in items:
+        code = str(item).strip().upper()
+        if code and code not in codes:
+            codes.append(code)
+    return codes or None
+
+
 def _parse_date_param(value) -> date | None:
     if not value:
         return None
@@ -100,6 +116,51 @@ def _parse_int_param(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _first_defined(*values):
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _football_data_error_response(exc: FootballDataError):
+    upstream_status = exc.status_code
+    error_type = (getattr(exc, "error_type", None) or "football_data_error").strip()
+
+    if upstream_status == 401 or error_type == "auth":
+        status = 502
+        reason = "football_data_unauthorized"
+    elif upstream_status == 429 or error_type == "rate_limited":
+        status = 429
+        reason = "football_data_rate_limited"
+    elif error_type == "config":
+        status = 500
+        reason = "football_data_not_configured"
+    elif error_type == "timeout":
+        status = 504
+        reason = "football_data_timeout"
+    elif upstream_status is not None and upstream_status >= 500:
+        status = 503
+        reason = "football_data_unavailable"
+    elif error_type in {"network", "upstream"}:
+        status = 503
+        reason = "football_data_unavailable"
+    else:
+        status = 502
+        reason = "football_data_error"
+
+    payload = {
+        "ok": False,
+        "error": reason,
+        "error_type": error_type,
+        "upstream_status": upstream_status,
+        "endpoint": exc.endpoint,
+        "detail": str(exc),
+        "retryable": bool(getattr(exc, "retryable", False)),
+    }
+    return JsonResponse(payload, status=status)
 
 
 @csrf_exempt
@@ -135,14 +196,18 @@ def import_fixtures_view(request):
         or request.GET.get("date_to")
     )
     days_ahead = _parse_int_param(
-        body.get("days_ahead")
-        or request.POST.get("days_ahead")
-        or request.GET.get("days_ahead")
+        _first_defined(
+            body.get("days_ahead"),
+            request.POST.get("days_ahead"),
+            request.GET.get("days_ahead"),
+        )
     )
     days_back = _parse_int_param(
-        body.get("days_back")
-        or request.POST.get("days_back")
-        or request.GET.get("days_back")
+        _first_defined(
+            body.get("days_back"),
+            request.POST.get("days_back"),
+            request.GET.get("days_back"),
+        )
     )
 
     used_date_from = date_from
@@ -176,25 +241,32 @@ def import_fixtures_view(request):
             exc.endpoint,
             exc,
         )
+        return _football_data_error_response(exc)
+    except Exception:
+        logger.exception("Internal import-fixtures failed.")
         return JsonResponse(
             {
                 "ok": False,
-                "error": "football_data_error",
-                "status_code": exc.status_code,
-                "endpoint": exc.endpoint,
-                "detail": str(exc),
+                "error": "internal_error",
+                "reason": "unexpected_exception",
             },
-            status=502,
+            status=500,
         )
-    except Exception:
-        logger.exception("Internal import-fixtures failed.")
-        return JsonResponse({"ok": False, "error": "internal_error"}, status=500)
     logger.info(
         "Internal import-fixtures done created=%s updated=%s skipped=%s duration=%.3fs",
         result.created_matches,
         result.updated_matches,
         result.skipped_matches,
         result.duration_seconds,
+    )
+    logger.info(
+        "Internal import-fixtures requests count in this run: %s",
+        result.api_calls_used,
+    )
+    logger.info(
+        "Internal import-fixtures inserted/updated fixtures: created=%s updated=%s",
+        result.created_matches,
+        result.updated_matches,
     )
     return JsonResponse(
         {
@@ -232,20 +304,17 @@ def poll_matches_view(request):
             exc.endpoint,
             exc,
         )
+        return _football_data_error_response(exc)
+    except Exception:
+        logger.exception("Internal poll-matches failed.")
         return JsonResponse(
             {
                 "ok": False,
-                "error": "football_data_error",
-                "status_code": exc.status_code,
-                "endpoint": exc.endpoint,
-                "detail": str(exc),
-                "retryable": True,
+                "error": "internal_error",
+                "reason": "unexpected_exception",
             },
-            status=200,
+            status=500,
         )
-    except Exception:
-        logger.exception("Internal poll-matches failed.")
-        return JsonResponse({"ok": False, "error": "internal_error"}, status=500)
     if result.skipped:
         logger.info(
             "Internal poll-matches skipped reason=%s duration=%.3fs",
@@ -291,6 +360,134 @@ def poll_matches_view(request):
 
 @csrf_exempt
 @require_POST
+def bootstrap_view(request):
+    if not _is_authorized(request):
+        logger.warning("Internal bootstrap unauthorized ip=%s", _get_client_ip(request))
+        return _unauthorized()
+    if not _rate_limit_ip(request, key_prefix="internal:bootstrap", limit=10, window_seconds=60):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
+
+    body = _parse_json_body(request)
+    leagues = _parse_leagues(
+        body.get("leagues")
+        or request.POST.get("leagues")
+        or request.GET.get("leagues")
+        or request.GET.getlist("league")
+    )
+    codes = _parse_codes(
+        body.get("codes")
+        or body.get("code")
+        or request.POST.get("codes")
+        or request.POST.get("code")
+        or request.GET.get("codes")
+        or request.GET.getlist("code")
+    )
+    fixtures_days = _parse_int_param(
+        _first_defined(
+            body.get("fixtures_days"),
+            body.get("days_ahead"),
+            request.POST.get("fixtures_days"),
+            request.POST.get("days_ahead"),
+            request.GET.get("fixtures_days"),
+            request.GET.get("days_ahead"),
+        )
+    )
+    fixtures_days_back = _parse_int_param(
+        _first_defined(
+            body.get("fixtures_days_back"),
+            body.get("days_back"),
+            request.POST.get("fixtures_days_back"),
+            request.POST.get("days_back"),
+            request.GET.get("fixtures_days_back"),
+            request.GET.get("days_back"),
+        )
+    )
+    date_from = _parse_date_param(
+        body.get("from")
+        or body.get("date_from")
+        or request.POST.get("from")
+        or request.POST.get("date_from")
+        or request.GET.get("from")
+        or request.GET.get("date_from")
+    )
+    date_to = _parse_date_param(
+        body.get("to")
+        or body.get("date_to")
+        or request.POST.get("to")
+        or request.POST.get("date_to")
+        or request.GET.get("to")
+        or request.GET.get("date_to")
+    )
+    logger.info(
+        "Internal bootstrap start leagues=%s codes=%s fixtures_days=%s fixtures_days_back=%s from=%s to=%s ip=%s",
+        leagues,
+        codes,
+        fixtures_days,
+        fixtures_days_back,
+        date_from,
+        date_to,
+        _get_client_ip(request),
+    )
+    try:
+        result = bootstrap_once(
+            leagues=leagues,
+            codes=codes,
+            fixtures_days=fixtures_days,
+            fixtures_days_back=fixtures_days_back,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except FootballDataError as exc:
+        logger.error(
+            "Internal bootstrap football-data error status=%s endpoint=%s detail=%s",
+            exc.status_code,
+            exc.endpoint,
+            exc,
+        )
+        return _football_data_error_response(exc)
+    except Exception:
+        logger.exception("Internal bootstrap failed.")
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "internal_error",
+                "reason": "unexpected_exception",
+            },
+            status=500,
+        )
+
+    logger.info(
+        "Internal bootstrap done: competitions %s, teams %s, api_calls=%s, duration=%.3fs",
+        result.competitions,
+        result.teams,
+        result.api_calls_used,
+        result.duration_seconds,
+    )
+    return JsonResponse(
+        {
+            "ok": True,
+            "competitions": result.competitions,
+            "teams": result.teams,
+            "fixtures": {
+                "matches_seen": result.fixtures_matches,
+                "created": result.fixtures_created,
+                "updated": result.fixtures_updated,
+                "skipped": result.fixtures_skipped,
+                "date_from": result.fixtures_date_from.isoformat()
+                if result.fixtures_date_from
+                else None,
+                "date_to": result.fixtures_date_to.isoformat()
+                if result.fixtures_date_to
+                else None,
+            },
+            "api_calls_used": result.api_calls_used,
+            "duration_seconds": round(result.duration_seconds, 3),
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
 def recompute_watchability_view(request):
     if not _is_authorized(request):
         logger.warning(
@@ -303,7 +500,11 @@ def recompute_watchability_view(request):
 
     body = _parse_json_body(request)
     days = _parse_int_param(
-        body.get("days") or request.POST.get("days") or request.GET.get("days")
+        _first_defined(
+            body.get("days"),
+            request.POST.get("days"),
+            request.GET.get("days"),
+        )
     )
     days = max(int(days) if days is not None else 7, 0)
 
@@ -311,23 +512,39 @@ def recompute_watchability_view(request):
     end = now + timedelta(days=days)
     start_time = time.monotonic()
 
-    matches = Match.objects.filter(date_time__gte=now, date_time__lte=end)
-    total = matches.count()
-    updated = 0
+    logger.info(
+        "Internal recompute-watchability start days=%s source=db-only ip=%s",
+        days,
+        _get_client_ip(request),
+    )
+    try:
+        matches = Match.objects.filter(date_time__gte=now, date_time__lte=end)
+        total = matches.count()
+        updated = 0
 
-    for match in matches:
-        result = compute_watchability(match.id)
-        match.watchability_score = result["watchability"]
-        match.watchability_confidence = result["confidence_label"]
-        match.watchability_updated_at = now
-        match.save(
-            update_fields=[
-                "watchability_score",
-                "watchability_confidence",
-                "watchability_updated_at",
-            ]
+        for match in matches:
+            result = compute_watchability(match.id)
+            match.watchability_score = result["watchability"]
+            match.watchability_confidence = result["confidence_label"]
+            match.watchability_updated_at = now
+            match.save(
+                update_fields=[
+                    "watchability_score",
+                    "watchability_confidence",
+                    "watchability_updated_at",
+                ]
+            )
+            updated += 1
+    except Exception:
+        logger.exception("Internal recompute-watchability failed.")
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "internal_error",
+                "reason": "unexpected_exception",
+            },
+            status=500,
         )
-        updated += 1
 
     duration = time.monotonic() - start_time
     logger.info(
@@ -343,6 +560,7 @@ def recompute_watchability_view(request):
             "updated": updated,
             "total": total,
             "days": days,
+            "source": "db_only",
             "date_from": now.isoformat(),
             "date_to": end.isoformat(),
             "duration_seconds": round(duration, 3),

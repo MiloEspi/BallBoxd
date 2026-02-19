@@ -76,6 +76,65 @@ def import_competitions_tier_one(competition_ids=None, codes=None, client=None, 
     return ImportSummary(competitions=len(competitions))
 
 
+def import_teams_for_competitions(
+    competition_ids,
+    client=None,
+    *,
+    raise_on_error: bool = False,
+):
+    unique_ids: list[int] = []
+    for value in competition_ids or []:
+        try:
+            item = int(value)
+        except (TypeError, ValueError):
+            continue
+        if item not in unique_ids:
+            unique_ids.append(item)
+
+    if not unique_ids:
+        return ImportSummary()
+
+    try:
+        client = client or FootballDataClient()
+    except FootballDataError as exc:
+        logger.error("Competition team import failed: %s", exc)
+        if raise_on_error:
+            raise
+        return ImportSummary()
+
+    competitions = set()
+    teams = set()
+    for competition_id in unique_ids:
+        try:
+            payload = _run_async(client.get_competition_teams(competition_id))
+        except FootballDataError as exc:
+            logger.error(
+                "Competition team import failed competition=%s: %s",
+                competition_id,
+                exc,
+            )
+            if raise_on_error:
+                raise
+            continue
+
+        competition_payload = payload.get("competition") or {"id": competition_id}
+        tournament, _, _ = upsert_competition_from_api(competition_payload)
+        if tournament and tournament.external_id is not None:
+            competitions.add(tournament.external_id)
+        else:
+            competitions.add(competition_id)
+
+        for team_data in payload.get("teams", []):
+            team, _, _ = upsert_team_from_api(team_data)
+            if team and team.external_id is not None:
+                teams.add(team.external_id)
+
+    return ImportSummary(
+        competitions=len(competitions),
+        teams=len(teams),
+    )
+
+
 def import_matches_global(date_from, date_to, competition_ids=None, client=None, *, raise_on_error: bool = False):
     date_from_str = _format_date(date_from)
     date_to_str = _format_date(date_to)

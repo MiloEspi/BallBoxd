@@ -1,14 +1,50 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from django.test import TestCase
+import httpx
+from django.test import TestCase, override_settings
 
 from matches.models import Match, Team, Tournament
-from matches.services.football_data import FootballDataClient
+from matches.services.football_data import FootballDataClient, FootballDataError
 from matches.services.importers import import_matches_global
 
-
+@override_settings(FOOTBALL_DATA_CACHE_SECONDS=0, FOOTBALL_DATA_THROTTLE_SECONDS=0)
 class FootballDataClientTests(TestCase):
+    @override_settings(FOOTBALL_DATA_TOKEN="env-token")
+    def test_uses_x_auth_token_header_from_settings(self):
+        responses = [
+            _FakeResponse(status_code=200, payload={"matches": []}, headers={}),
+        ]
+        observed = {"headers": None}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                observed["headers"] = headers
+                return responses.pop(0)
+
+        client = FootballDataClient(base_url="https://api.football-data.org/v4")
+
+        async def run():
+            return await client.get_matches_global("2024-01-01", "2024-01-01")
+
+        with patch(
+            "matches.services.football_data.httpx.AsyncClient",
+            new=FakeAsyncClient,
+        ):
+            payload = asyncio.run(run())
+
+        self.assertEqual(payload, {"matches": []})
+        self.assertEqual(observed["headers"], {"X-Auth-Token": "env-token"})
+
     def test_request_retries_on_429(self):
         responses = [
             _FakeResponse(
@@ -50,6 +86,127 @@ class FootballDataClientTests(TestCase):
             payload = asyncio.run(run())
 
         self.assertEqual(payload, {"matches": []})
+
+    def test_request_retries_on_429_uses_retry_after_header(self):
+        responses = [
+            _FakeResponse(
+                status_code=429,
+                payload={"error": "rate limit"},
+                headers={"Retry-After": "12"},
+            ),
+            _FakeResponse(status_code=200, payload={"matches": []}, headers={}),
+        ]
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                return responses.pop(0)
+
+        client = FootballDataClient(
+            token="test-token",
+            base_url="https://api.football-data.org/v4",
+            max_attempts=2,
+        )
+
+        async def run():
+            return await client.get_matches_global("2024-01-01", "2024-01-01")
+
+        sleep = AsyncMock()
+        with patch(
+            "matches.services.football_data.httpx.AsyncClient",
+            new=FakeAsyncClient,
+        ), patch(
+            "matches.services.football_data.asyncio.sleep",
+            new=sleep,
+        ):
+            payload = asyncio.run(run())
+
+        self.assertEqual(payload, {"matches": []})
+        sleep.assert_any_call(12)
+
+    def test_request_raises_auth_error_for_401(self):
+        responses = [
+            _FakeResponse(
+                status_code=401,
+                payload={"message": "The resource requires authentication"},
+                headers={},
+            ),
+        ]
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                return responses.pop(0)
+
+        client = FootballDataClient(
+            token="bad-token",
+            base_url="https://api.football-data.org/v4",
+            max_attempts=1,
+        )
+
+        async def run():
+            return await client.get_matches_global("2024-01-01", "2024-01-01")
+
+        with patch(
+            "matches.services.football_data.httpx.AsyncClient",
+            new=FakeAsyncClient,
+        ):
+            with self.assertRaises(FootballDataError) as ctx:
+                asyncio.run(run())
+
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.error_type, "auth")
+        self.assertFalse(ctx.exception.retryable)
+
+    def test_request_raises_timeout_error(self):
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                raise httpx.ReadTimeout("timed out")
+
+        client = FootballDataClient(
+            token="test-token",
+            base_url="https://api.football-data.org/v4",
+            max_attempts=1,
+        )
+
+        async def run():
+            return await client.get_matches_global("2024-01-01", "2024-01-01")
+
+        with patch(
+            "matches.services.football_data.httpx.AsyncClient",
+            new=FakeAsyncClient,
+        ):
+            with self.assertRaises(FootballDataError) as ctx:
+                asyncio.run(run())
+
+        self.assertIsNone(ctx.exception.status_code)
+        self.assertEqual(ctx.exception.error_type, "timeout")
+        self.assertTrue(ctx.exception.retryable)
 
 
 class ImportMatchesTests(TestCase):

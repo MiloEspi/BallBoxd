@@ -1,12 +1,15 @@
 from django.urls import path
 
 from .internal_views import (
+    bootstrap_view,
     import_fixtures_view,
     poll_matches_view,
     recompute_watchability_view,
 )
 
 urlpatterns = [
+    path("bootstrap", bootstrap_view, name="internal-bootstrap"),
+    path("bootstrap/", bootstrap_view),
     path("import-fixtures", import_fixtures_view, name="internal-import-fixtures"),
     path("import-fixtures/", import_fixtures_view),
     path("poll-matches", poll_matches_view, name="internal-poll-matches"),
