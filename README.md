@@ -82,6 +82,12 @@ Create a cron-job.org job:
 - Header: `X-CRON-TOKEN: <CRON_SECRET>`
 - Schedule: every 10 minutes
 
+If you recreate your Render Postgres database, run a one-time bootstrap first (this repopulates competitions and teams):
+```bash
+curl -X POST "https://<render-app>.onrender.com/internal/bootstrap?fixtures_days=0" \
+  -H "X-CRON-TOKEN: <CRON_SECRET>"
+```
+
 Manual test (poll once):
 ```bash
 curl -X POST "https://<render-app>.onrender.com/internal/poll-matches" \
