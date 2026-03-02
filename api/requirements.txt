@@ -4,3 +4,11 @@ django-cors-headers>=4.3
 dj-database-url>=2.2
 whitenoise>=6.8
 httpx==0.27.0
+
+
+whitenoise
+dj-database-url
+psycopg[binary]
+gunicorn
+
+
