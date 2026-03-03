@@ -1,4 +1,5 @@
 import './ui/global.css';
+import { Analytics } from '@vercel/analytics/react';
 import LanguageProvider from './components/i18n/LanguageProvider';
 import SiteFooter from './ui/site-footer';
 import SiteHeader from './ui/site-header';
@@ -18,6 +19,7 @@ export default function RootLayout({
             <SiteFooter />
           </div>
         </LanguageProvider>
+        <Analytics />
       </body>
     </html>
   );
