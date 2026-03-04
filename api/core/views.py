@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -8,6 +9,10 @@ from rest_framework.views import APIView
 from .serializers import RegisterSerializer, UserMiniSerializer
 
 User = get_user_model()
+
+
+def health_view(request):
+    return JsonResponse({"ok": True, "status": "healthy"})
 
 
 class RegisterView(APIView):

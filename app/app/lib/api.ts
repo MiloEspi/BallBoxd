@@ -23,6 +23,7 @@ const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 const API_BASE_URL = DEMO_MODE
   ? ''
   : process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api/v1';
+const API_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS ?? '20000');
 
 type LoginResponse = {
   token: string;
@@ -142,11 +143,29 @@ async function request<T>(
     }
   }
 
-  const res = await fetch(buildUrl(path), {
-    ...options,
-    headers,
-    cache: 'no-store',
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), {
+      ...options,
+      headers,
+      cache: 'no-store',
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (error) {
+    const isAbort =
+      error instanceof DOMException && error.name === 'AbortError';
+    if (isAbort) {
+      throw new ApiError(
+        `Request timed out after ${Math.ceil(API_TIMEOUT_MS / 1000)}s`,
+        0,
+      );
+    }
+    throw new ApiError('Network error: failed to reach API', 0);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     let data: ApiErrorBody | undefined;

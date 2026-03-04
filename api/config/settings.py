@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'core.middleware.RequestTimingMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -212,6 +213,7 @@ IMPORT_MATCHES_WEEKEND_MINUTES = int(
     os.getenv("IMPORT_MATCHES_WEEKEND_MINUTES", "10")
 )
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+REQUEST_SLOW_LOG_SECONDS = float(os.getenv("REQUEST_SLOW_LOG_SECONDS", "8"))
 
 # Shared secret for protected internal cron endpoints (/internal/*).
 CRON_SECRET = os.getenv("CRON_SECRET", "") or os.getenv("CRON-SECRET", "")

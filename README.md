@@ -63,15 +63,36 @@ Run once (for cron/scheduler):
 python manage.py poll_matches --once
 ```
 
+### Render web service (recommended defaults)
+Use this start command in Render:
+```bash
+cd api && gunicorn config.wsgi:application -c gunicorn.conf.py
+```
+`api/gunicorn.conf.py` reads these env vars (with safe defaults):
+```
+WEB_CONCURRENCY=2
+GUNICORN_THREADS=2
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
+GUNICORN_KEEPALIVE=5
+GUNICORN_MAX_REQUESTS=1000
+GUNICORN_MAX_REQUESTS_JITTER=100
+```
+Health endpoint:
+```
+GET /health/
+```
+
 ### Free scheduling with cron-job.org (no Render cron/worker)
 Render Cron Jobs/Background Workers/Shell are paid. To run the polling loop for free, use an external scheduler that hits protected internal endpoints on your Render web service.
+Do not call these `/internal/*` endpoints from frontend user flows; they are intended for scheduler-only traffic.
 
 Set an env var on Render:
 ```
 CRON_SECRET=<long_random_secret>
 ```
 Important: the key is `CRON_SECRET` (underscore). If you accidentally set `CRON-SECRET` (dash), rename it.
-Also ensure your Render hostname is allowed by Django (either set `ALLOWED_HOSTS`, or rely on Render’s `RENDER_EXTERNAL_HOSTNAME`):
+Also ensure your Render hostname is allowed by Django (either set `ALLOWED_HOSTS`, or rely on Render's `RENDER_EXTERNAL_HOSTNAME`):
 ```
 ALLOWED_HOSTS=ballboxd.onrender.com
 ```

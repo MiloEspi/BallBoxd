@@ -125,6 +125,32 @@ def _first_defined(*values):
     return None
 
 
+def _acquire_job_lock(job: str, *, timeout_seconds: int) -> str | None:
+    key = f"internal:job-lock:{job}"
+    token = f"{timezone.now().isoformat()}:{time.monotonic()}"
+    acquired = cache.add(key, token, timeout=timeout_seconds)
+    if not acquired:
+        return None
+    return key
+
+
+def _release_job_lock(lock_key: str | None):
+    if not lock_key:
+        return
+    cache.delete(lock_key)
+
+
+def _already_running(job: str):
+    return JsonResponse(
+        {
+            "ok": False,
+            "error": "already_running",
+            "job": job,
+        },
+        status=409,
+    )
+
+
 def _football_data_error_response(exc: FootballDataError):
     upstream_status = exc.status_code
     error_type = (getattr(exc, "error_type", None) or "football_data_error").strip()
@@ -172,117 +198,128 @@ def import_fixtures_view(request):
     if not _rate_limit_ip(request, key_prefix="internal:import-fixtures"):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
 
-    body = _parse_json_body(request)
-    leagues = _parse_leagues(
-        body.get("leagues")
-        or request.POST.get("leagues")
-        or request.GET.get("leagues")
-        or request.GET.getlist("league")
-    )
-    date_from = _parse_date_param(
-        body.get("from")
-        or body.get("date_from")
-        or request.POST.get("from")
-        or request.POST.get("date_from")
-        or request.GET.get("from")
-        or request.GET.get("date_from")
-    )
-    date_to = _parse_date_param(
-        body.get("to")
-        or body.get("date_to")
-        or request.POST.get("to")
-        or request.POST.get("date_to")
-        or request.GET.get("to")
-        or request.GET.get("date_to")
-    )
-    days_ahead = _parse_int_param(
-        _first_defined(
-            body.get("days_ahead"),
-            request.POST.get("days_ahead"),
-            request.GET.get("days_ahead"),
+    lock_key = _acquire_job_lock("import-fixtures", timeout_seconds=60 * 30)
+    if not lock_key:
+        logger.warning(
+            "Internal import-fixtures skipped: already running ip=%s",
+            _get_client_ip(request),
         )
-    )
-    days_back = _parse_int_param(
-        _first_defined(
-            body.get("days_back"),
-            request.POST.get("days_back"),
-            request.GET.get("days_back"),
-        )
-    )
+        return _already_running("import-fixtures")
 
-    used_date_from = date_from
-    used_date_to = date_to
-    if used_date_from is None and used_date_to is None and (days_ahead is not None or days_back is not None):
-        today = timezone.now().date()
-        used_date_from = today - timedelta(days=max(0, int(days_back or 0)))
-        used_date_to = today + timedelta(days=max(0, int(days_ahead or 0)))
-
-    logger.info(
-        "Internal import-fixtures start leagues=%s from=%s to=%s days_ahead=%s days_back=%s ip=%s",
-        leagues,
-        used_date_from,
-        used_date_to,
-        days_ahead,
-        days_back,
-        _get_client_ip(request),
-    )
     try:
-        result = import_fixtures_once(
-            leagues=leagues,
-            date_from=used_date_from,
-            date_to=used_date_to,
-            days_ahead=days_ahead,
-            days_back=days_back,
+        body = _parse_json_body(request)
+        leagues = _parse_leagues(
+            body.get("leagues")
+            or request.POST.get("leagues")
+            or request.GET.get("leagues")
+            or request.GET.getlist("league")
         )
-    except FootballDataError as exc:
-        logger.error(
-            "Internal import-fixtures football-data error status=%s endpoint=%s detail=%s",
-            exc.status_code,
-            exc.endpoint,
-            exc,
+        date_from = _parse_date_param(
+            body.get("from")
+            or body.get("date_from")
+            or request.POST.get("from")
+            or request.POST.get("date_from")
+            or request.GET.get("from")
+            or request.GET.get("date_from")
         )
-        return _football_data_error_response(exc)
-    except Exception:
-        logger.exception("Internal import-fixtures failed.")
+        date_to = _parse_date_param(
+            body.get("to")
+            or body.get("date_to")
+            or request.POST.get("to")
+            or request.POST.get("date_to")
+            or request.GET.get("to")
+            or request.GET.get("date_to")
+        )
+        days_ahead = _parse_int_param(
+            _first_defined(
+                body.get("days_ahead"),
+                request.POST.get("days_ahead"),
+                request.GET.get("days_ahead"),
+            )
+        )
+        days_back = _parse_int_param(
+            _first_defined(
+                body.get("days_back"),
+                request.POST.get("days_back"),
+                request.GET.get("days_back"),
+            )
+        )
+
+        used_date_from = date_from
+        used_date_to = date_to
+        if used_date_from is None and used_date_to is None and (days_ahead is not None or days_back is not None):
+            today = timezone.now().date()
+            used_date_from = today - timedelta(days=max(0, int(days_back or 0)))
+            used_date_to = today + timedelta(days=max(0, int(days_ahead or 0)))
+
+        logger.info(
+            "Internal import-fixtures start leagues=%s from=%s to=%s days_ahead=%s days_back=%s ip=%s",
+            leagues,
+            used_date_from,
+            used_date_to,
+            days_ahead,
+            days_back,
+            _get_client_ip(request),
+        )
+        try:
+            result = import_fixtures_once(
+                leagues=leagues,
+                date_from=used_date_from,
+                date_to=used_date_to,
+                days_ahead=days_ahead,
+                days_back=days_back,
+            )
+        except FootballDataError as exc:
+            logger.error(
+                "Internal import-fixtures football-data error status=%s endpoint=%s detail=%s",
+                exc.status_code,
+                exc.endpoint,
+                exc,
+            )
+            return _football_data_error_response(exc)
+        except Exception:
+            logger.exception("Internal import-fixtures failed.")
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "reason": "unexpected_exception",
+                },
+                status=500,
+            )
+        logger.info(
+            "Internal import-fixtures done created=%s updated=%s skipped=%s duration=%.3fs",
+            result.created_matches,
+            result.updated_matches,
+            result.skipped_matches,
+            result.duration_seconds,
+        )
+        logger.info(
+            "Internal import-fixtures requests count in this run: %s",
+            result.api_calls_used,
+        )
+        logger.info(
+            "Internal import-fixtures inserted/updated fixtures: created=%s updated=%s",
+            result.created_matches,
+            result.updated_matches,
+        )
         return JsonResponse(
             {
-                "ok": False,
-                "error": "internal_error",
-                "reason": "unexpected_exception",
-            },
-            status=500,
+                "ok": True,
+                "created": result.created_matches,
+                "updated": result.updated_matches,
+                "skipped": result.skipped_matches,
+                "duration_seconds": round(result.duration_seconds, 3),
+                "competitions": result.competitions,
+                "teams": result.teams,
+                "matches_seen": result.matches,
+                "api_calls_used": result.api_calls_used,
+                "date_from": used_date_from.isoformat() if used_date_from else None,
+                "date_to": used_date_to.isoformat() if used_date_to else None,
+            }
         )
-    logger.info(
-        "Internal import-fixtures done created=%s updated=%s skipped=%s duration=%.3fs",
-        result.created_matches,
-        result.updated_matches,
-        result.skipped_matches,
-        result.duration_seconds,
-    )
-    logger.info(
-        "Internal import-fixtures requests count in this run: %s",
-        result.api_calls_used,
-    )
-    logger.info(
-        "Internal import-fixtures inserted/updated fixtures: created=%s updated=%s",
-        result.created_matches,
-        result.updated_matches,
-    )
-    return JsonResponse(
-        {
-            "ok": True,
-            "created": result.created_matches,
-            "updated": result.updated_matches,
-            "skipped": result.skipped_matches,
-            "duration_seconds": round(result.duration_seconds, 3),
-            "competitions": result.competitions,
-            "teams": result.teams,
-            "matches_seen": result.matches,
-            "api_calls_used": result.api_calls_used,
-            "date_from": used_date_from.isoformat() if used_date_from else None,
-            "date_to": used_date_to.isoformat() if used_date_to else None,
-        }
-    )
+    finally:
+        _release_job_lock(lock_key)
 
 
 @csrf_exempt
@@ -294,68 +331,81 @@ def poll_matches_view(request):
     if not _rate_limit_ip(request, key_prefix="internal:poll-matches"):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
 
-    logger.info("Internal poll-matches start ip=%s", _get_client_ip(request))
+    lock_key = _acquire_job_lock("poll-matches", timeout_seconds=60 * 15)
+    if not lock_key:
+        logger.warning(
+            "Internal poll-matches skipped: already running ip=%s",
+            _get_client_ip(request),
+        )
+        return _already_running("poll-matches")
+
     try:
-        result = poll_matches_once()
-    except FootballDataError as exc:
-        logger.error(
-            "Internal poll-matches football-data error status=%s endpoint=%s detail=%s",
-            exc.status_code,
-            exc.endpoint,
-            exc,
-        )
-        return _football_data_error_response(exc)
-    except Exception:
-        logger.exception("Internal poll-matches failed.")
-        return JsonResponse(
-            {
-                "ok": False,
-                "error": "internal_error",
-                "reason": "unexpected_exception",
-            },
-            status=500,
-        )
-    if result.skipped:
         logger.info(
-            "Internal poll-matches skipped reason=%s duration=%.3fs",
-            result.reason,
+            "Internal poll-matches start ip=%s", _get_client_ip(request)
+        )
+        try:
+            result = poll_matches_once()
+        except FootballDataError as exc:
+            logger.error(
+                "Internal poll-matches football-data error status=%s endpoint=%s detail=%s",
+                exc.status_code,
+                exc.endpoint,
+                exc,
+            )
+            return _football_data_error_response(exc)
+        except Exception:
+            logger.exception("Internal poll-matches failed.")
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "reason": "unexpected_exception",
+                },
+                status=500,
+            )
+        if result.skipped:
+            logger.info(
+                "Internal poll-matches skipped reason=%s duration=%.3fs",
+                result.reason,
+                result.duration_seconds,
+            )
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "skipped": True,
+                    "reason": result.reason,
+                    "last_run_seconds_ago": result.last_run_seconds_ago,
+                    "updated_matches": 0,
+                    "created_matches": 0,
+                    "matches_seen": 0,
+                    "api_calls_used": 0,
+                    "duration_seconds": round(result.duration_seconds, 3),
+                }
+            )
+
+        logger.info(
+            "Internal poll-matches done updated=%s created=%s skipped=%s api_calls=%s duration=%.3fs",
+            result.updated_matches,
+            result.created_matches,
+            result.skipped_matches,
+            result.api_calls_used,
             result.duration_seconds,
         )
         return JsonResponse(
             {
                 "ok": True,
-                "skipped": True,
-                "reason": result.reason,
-                "last_run_seconds_ago": result.last_run_seconds_ago,
-                "updated_matches": 0,
-                "created_matches": 0,
-                "matches_seen": 0,
-                "api_calls_used": 0,
+                "skipped": False,
+                "updated_matches": result.updated_matches,
+                "created_matches": result.created_matches,
+                "matches_seen": result.matches_seen,
+                "competitions": result.competitions,
+                "teams": result.teams,
+                "api_calls_used": result.api_calls_used,
                 "duration_seconds": round(result.duration_seconds, 3),
             }
         )
-
-    logger.info(
-        "Internal poll-matches done updated=%s created=%s skipped=%s api_calls=%s duration=%.3fs",
-        result.updated_matches,
-        result.created_matches,
-        result.skipped_matches,
-        result.api_calls_used,
-        result.duration_seconds,
-    )
-    return JsonResponse(
-        {
-            "ok": True,
-            "skipped": False,
-            "updated_matches": result.updated_matches,
-            "created_matches": result.created_matches,
-            "matches_seen": result.matches_seen,
-            "competitions": result.competitions,
-            "teams": result.teams,
-            "api_calls_used": result.api_calls_used,
-            "duration_seconds": round(result.duration_seconds, 3),
-        }
-    )
+    finally:
+        _release_job_lock(lock_key)
 
 
 @csrf_exempt
@@ -367,123 +417,134 @@ def bootstrap_view(request):
     if not _rate_limit_ip(request, key_prefix="internal:bootstrap", limit=10, window_seconds=60):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
 
-    body = _parse_json_body(request)
-    leagues = _parse_leagues(
-        body.get("leagues")
-        or request.POST.get("leagues")
-        or request.GET.get("leagues")
-        or request.GET.getlist("league")
-    )
-    codes = _parse_codes(
-        body.get("codes")
-        or body.get("code")
-        or request.POST.get("codes")
-        or request.POST.get("code")
-        or request.GET.get("codes")
-        or request.GET.getlist("code")
-    )
-    fixtures_days = _parse_int_param(
-        _first_defined(
-            body.get("fixtures_days"),
-            body.get("days_ahead"),
-            request.POST.get("fixtures_days"),
-            request.POST.get("days_ahead"),
-            request.GET.get("fixtures_days"),
-            request.GET.get("days_ahead"),
+    lock_key = _acquire_job_lock("bootstrap", timeout_seconds=60 * 30)
+    if not lock_key:
+        logger.warning(
+            "Internal bootstrap skipped: already running ip=%s",
+            _get_client_ip(request),
         )
-    )
-    fixtures_days_back = _parse_int_param(
-        _first_defined(
-            body.get("fixtures_days_back"),
-            body.get("days_back"),
-            request.POST.get("fixtures_days_back"),
-            request.POST.get("days_back"),
-            request.GET.get("fixtures_days_back"),
-            request.GET.get("days_back"),
-        )
-    )
-    date_from = _parse_date_param(
-        body.get("from")
-        or body.get("date_from")
-        or request.POST.get("from")
-        or request.POST.get("date_from")
-        or request.GET.get("from")
-        or request.GET.get("date_from")
-    )
-    date_to = _parse_date_param(
-        body.get("to")
-        or body.get("date_to")
-        or request.POST.get("to")
-        or request.POST.get("date_to")
-        or request.GET.get("to")
-        or request.GET.get("date_to")
-    )
-    logger.info(
-        "Internal bootstrap start leagues=%s codes=%s fixtures_days=%s fixtures_days_back=%s from=%s to=%s ip=%s",
-        leagues,
-        codes,
-        fixtures_days,
-        fixtures_days_back,
-        date_from,
-        date_to,
-        _get_client_ip(request),
-    )
+        return _already_running("bootstrap")
+
     try:
-        result = bootstrap_once(
-            leagues=leagues,
-            codes=codes,
-            fixtures_days=fixtures_days,
-            fixtures_days_back=fixtures_days_back,
-            date_from=date_from,
-            date_to=date_to,
+        body = _parse_json_body(request)
+        leagues = _parse_leagues(
+            body.get("leagues")
+            or request.POST.get("leagues")
+            or request.GET.get("leagues")
+            or request.GET.getlist("league")
         )
-    except FootballDataError as exc:
-        logger.error(
-            "Internal bootstrap football-data error status=%s endpoint=%s detail=%s",
-            exc.status_code,
-            exc.endpoint,
-            exc,
+        codes = _parse_codes(
+            body.get("codes")
+            or body.get("code")
+            or request.POST.get("codes")
+            or request.POST.get("code")
+            or request.GET.get("codes")
+            or request.GET.getlist("code")
         )
-        return _football_data_error_response(exc)
-    except Exception:
-        logger.exception("Internal bootstrap failed.")
+        fixtures_days = _parse_int_param(
+            _first_defined(
+                body.get("fixtures_days"),
+                body.get("days_ahead"),
+                request.POST.get("fixtures_days"),
+                request.POST.get("days_ahead"),
+                request.GET.get("fixtures_days"),
+                request.GET.get("days_ahead"),
+            )
+        )
+        fixtures_days_back = _parse_int_param(
+            _first_defined(
+                body.get("fixtures_days_back"),
+                body.get("days_back"),
+                request.POST.get("fixtures_days_back"),
+                request.POST.get("days_back"),
+                request.GET.get("fixtures_days_back"),
+                request.GET.get("days_back"),
+            )
+        )
+        date_from = _parse_date_param(
+            body.get("from")
+            or body.get("date_from")
+            or request.POST.get("from")
+            or request.POST.get("date_from")
+            or request.GET.get("from")
+            or request.GET.get("date_from")
+        )
+        date_to = _parse_date_param(
+            body.get("to")
+            or body.get("date_to")
+            or request.POST.get("to")
+            or request.POST.get("date_to")
+            or request.GET.get("to")
+            or request.GET.get("date_to")
+        )
+        logger.info(
+            "Internal bootstrap start leagues=%s codes=%s fixtures_days=%s fixtures_days_back=%s from=%s to=%s ip=%s",
+            leagues,
+            codes,
+            fixtures_days,
+            fixtures_days_back,
+            date_from,
+            date_to,
+            _get_client_ip(request),
+        )
+        try:
+            result = bootstrap_once(
+                leagues=leagues,
+                codes=codes,
+                fixtures_days=fixtures_days,
+                fixtures_days_back=fixtures_days_back,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except FootballDataError as exc:
+            logger.error(
+                "Internal bootstrap football-data error status=%s endpoint=%s detail=%s",
+                exc.status_code,
+                exc.endpoint,
+                exc,
+            )
+            return _football_data_error_response(exc)
+        except Exception:
+            logger.exception("Internal bootstrap failed.")
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "reason": "unexpected_exception",
+                },
+                status=500,
+            )
+
+        logger.info(
+            "Internal bootstrap done: competitions %s, teams %s, api_calls=%s, duration=%.3fs",
+            result.competitions,
+            result.teams,
+            result.api_calls_used,
+            result.duration_seconds,
+        )
         return JsonResponse(
             {
-                "ok": False,
-                "error": "internal_error",
-                "reason": "unexpected_exception",
-            },
-            status=500,
+                "ok": True,
+                "competitions": result.competitions,
+                "teams": result.teams,
+                "fixtures": {
+                    "matches_seen": result.fixtures_matches,
+                    "created": result.fixtures_created,
+                    "updated": result.fixtures_updated,
+                    "skipped": result.fixtures_skipped,
+                    "date_from": result.fixtures_date_from.isoformat()
+                    if result.fixtures_date_from
+                    else None,
+                    "date_to": result.fixtures_date_to.isoformat()
+                    if result.fixtures_date_to
+                    else None,
+                },
+                "api_calls_used": result.api_calls_used,
+                "duration_seconds": round(result.duration_seconds, 3),
+            }
         )
-
-    logger.info(
-        "Internal bootstrap done: competitions %s, teams %s, api_calls=%s, duration=%.3fs",
-        result.competitions,
-        result.teams,
-        result.api_calls_used,
-        result.duration_seconds,
-    )
-    return JsonResponse(
-        {
-            "ok": True,
-            "competitions": result.competitions,
-            "teams": result.teams,
-            "fixtures": {
-                "matches_seen": result.fixtures_matches,
-                "created": result.fixtures_created,
-                "updated": result.fixtures_updated,
-                "skipped": result.fixtures_skipped,
-                "date_from": result.fixtures_date_from.isoformat()
-                if result.fixtures_date_from
-                else None,
-                "date_to": result.fixtures_date_to.isoformat()
-                if result.fixtures_date_to
-                else None,
-            },
-            "api_calls_used": result.api_calls_used,
-            "duration_seconds": round(result.duration_seconds, 3),
-        }
-    )
+    finally:
+        _release_job_lock(lock_key)
 
 
 @csrf_exempt
@@ -498,71 +559,82 @@ def recompute_watchability_view(request):
     if not _rate_limit_ip(request, key_prefix="internal:recompute-watchability"):
         return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
 
-    body = _parse_json_body(request)
-    days = _parse_int_param(
-        _first_defined(
-            body.get("days"),
-            request.POST.get("days"),
-            request.GET.get("days"),
+    lock_key = _acquire_job_lock("recompute-watchability", timeout_seconds=60 * 15)
+    if not lock_key:
+        logger.warning(
+            "Internal recompute-watchability skipped: already running ip=%s",
+            _get_client_ip(request),
         )
-    )
-    days = max(int(days) if days is not None else 7, 0)
+        return _already_running("recompute-watchability")
 
-    now = timezone.now()
-    end = now + timedelta(days=days)
-    start_time = time.monotonic()
-
-    logger.info(
-        "Internal recompute-watchability start days=%s source=db-only ip=%s",
-        days,
-        _get_client_ip(request),
-    )
     try:
-        matches = Match.objects.filter(date_time__gte=now, date_time__lte=end)
-        total = matches.count()
-        updated = 0
-
-        for match in matches:
-            result = compute_watchability(match.id)
-            match.watchability_score = result["watchability"]
-            match.watchability_confidence = result["confidence_label"]
-            match.watchability_updated_at = now
-            match.save(
-                update_fields=[
-                    "watchability_score",
-                    "watchability_confidence",
-                    "watchability_updated_at",
-                ]
+        body = _parse_json_body(request)
+        days = _parse_int_param(
+            _first_defined(
+                body.get("days"),
+                request.POST.get("days"),
+                request.GET.get("days"),
             )
-            updated += 1
-    except Exception:
-        logger.exception("Internal recompute-watchability failed.")
+        )
+        days = max(int(days) if days is not None else 7, 0)
+
+        now = timezone.now()
+        end = now + timedelta(days=days)
+        start_time = time.monotonic()
+
+        logger.info(
+            "Internal recompute-watchability start days=%s source=db-only ip=%s",
+            days,
+            _get_client_ip(request),
+        )
+        try:
+            matches = Match.objects.filter(date_time__gte=now, date_time__lte=end)
+            total = matches.count()
+            updated = 0
+
+            for match in matches:
+                result = compute_watchability(match.id)
+                match.watchability_score = result["watchability"]
+                match.watchability_confidence = result["confidence_label"]
+                match.watchability_updated_at = now
+                match.save(
+                    update_fields=[
+                        "watchability_score",
+                        "watchability_confidence",
+                        "watchability_updated_at",
+                    ]
+                )
+                updated += 1
+        except Exception:
+            logger.exception("Internal recompute-watchability failed.")
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "reason": "unexpected_exception",
+                },
+                status=500,
+            )
+
+        duration = time.monotonic() - start_time
+        logger.info(
+            "Internal recompute-watchability done updated=%s total=%s days=%s duration=%.3fs",
+            updated,
+            total,
+            days,
+            duration,
+        )
         return JsonResponse(
             {
-                "ok": False,
-                "error": "internal_error",
-                "reason": "unexpected_exception",
-            },
-            status=500,
+                "ok": True,
+                "updated": updated,
+                "total": total,
+                "days": days,
+                "source": "db_only",
+                "date_from": now.isoformat(),
+                "date_to": end.isoformat(),
+                "duration_seconds": round(duration, 3),
+            }
         )
-
-    duration = time.monotonic() - start_time
-    logger.info(
-        "Internal recompute-watchability done updated=%s total=%s days=%s duration=%.3fs",
-        updated,
-        total,
-        days,
-        duration,
-    )
-    return JsonResponse(
-        {
-            "ok": True,
-            "updated": updated,
-            "total": total,
-            "days": days,
-            "source": "db_only",
-            "date_from": now.isoformat(),
-            "date_to": end.isoformat(),
-            "duration_seconds": round(duration, 3),
-        }
-    )
+    finally:
+        _release_job_lock(lock_key)
